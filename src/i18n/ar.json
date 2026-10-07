@@ -1,0 +1,178 @@
+{
+  "app": {
+    "name": "PlaudeNote"
+  },
+  "sidebar": {
+    "allNotes": "كل الملاحظات",
+    "recent": "الأخيرة",
+    "pinned": "المثبّتة",
+    "folders": "المجلدات",
+    "tags": "الوسوم",
+    "trash": "المحذوفة",
+    "newFolder": "مجلد جديد",
+    "models": "النماذج",
+    "modelsMissing": "غير محمّلة",
+    "modelsReady": "جاهزة",
+    "global": "عام",
+    "globalOff": "متوقف",
+    "globalOn": "مفعّل",
+    "modelsPartial": "جزئي"
+  },
+  "list": {
+    "search": "بحث",
+    "newNote": "ملاحظة جديدة",
+    "noNotes": "لا توجد ملاحظات",
+    "noResults": "لا نتائج",
+    "pinnedGroup": "المثبّتة",
+    "today": "اليوم",
+    "yesterday": "أمس",
+    "week": "آخر ٧ أيام",
+    "earlier": "أقدم",
+    "count_zero": "لا ملاحظات",
+    "count_one": "ملاحظة واحدة",
+    "count_two": "ملاحظتان",
+    "count_few": "{{count}} ملاحظات",
+    "count_many": "{{count}} ملاحظة",
+    "count_other": "{{count}} ملاحظة",
+    "newNoteTitle": "ملاحظة جديدة"
+  },
+  "editor": {
+    "empty": "لم يتم اختيار ملاحظة",
+    "emptyHint": "اختر ملاحظة من القائمة أو أنشئ واحدة جديدة",
+    "titlePlaceholder": "العنوان",
+    "bodyPlaceholder": "ابدأ الكتابة أو سجّل صوتًا…",
+    "ai": "الذكاء الاصطناعي",
+    "share": "مشاركة",
+    "bold": "غامق",
+    "italic": "مائل",
+    "list": "قائمة",
+    "checklist": "قائمة مهام",
+    "table": "جدول",
+    "image": "صورة",
+    "orderedList": "قائمة مرقّمة"
+  },
+  "record": {
+    "record": "تسجيل",
+    "stop": "إيقاف",
+    "upload": "رفع ملف صوتي",
+    "language": "اللغة",
+    "auto": "تلقائي",
+    "uz": "O'zbek",
+    "ar": "عربي",
+    "en": "English",
+    "cancel": "إلغاء",
+    "dismiss": "إغلاق",
+    "transcribing": "جارٍ التفريغ… {{pct}}%",
+    "noModel": "نموذج الصوت غير محمّل — افتح النماذج",
+    "openModels": "النماذج",
+    "summarizing": "الذكاء الاصطناعي يكتب الملاحظة…",
+    "noLlm": "نموذج اللغة غير محمّل للملخص — النماذج"
+  },
+  "settings": {
+    "title": "الإعدادات",
+    "theme": "المظهر",
+    "system": "النظام",
+    "light": "فاتح",
+    "dark": "داكن",
+    "language": "لغة الواجهة",
+    "openModels": "إدارة النماذج…"
+  },
+  "menu": {
+    "pin": "تثبيت",
+    "unpin": "إلغاء التثبيت",
+    "moveTo": "نقل إلى مجلد",
+    "noFolder": "بدون مجلد",
+    "delete": "حذف",
+    "restore": "استعادة",
+    "deleteForever": "حذف نهائي",
+    "rename": "إعادة تسمية",
+    "deleteFolder": "حذف المجلد",
+    "language": "لغة الملاحظة"
+  },
+  "trash": {
+    "banner": "هذه الملاحظة في المحذوفات. ستُحذف نهائيًا بعد ٣٠ يومًا.",
+    "empty": "إفراغ المحذوفات"
+  },
+  "slash": {
+    "text": "نص",
+    "h1": "عنوان ١",
+    "h2": "عنوان ٢",
+    "h3": "عنوان ٣",
+    "bullet": "قائمة نقطية",
+    "numbered": "قائمة مرقّمة",
+    "task": "قائمة مهام",
+    "toggle": "كتلة قابلة للطي",
+    "callout": "تنبيه",
+    "quote": "اقتباس",
+    "code": "كود",
+    "table": "جدول",
+    "divider": "فاصل",
+    "image": "صورة",
+    "empty": "لا نتائج"
+  },
+  "block": {
+    "turnInto": "تحويل إلى",
+    "duplicate": "تكرار",
+    "delete": "حذف الكتلة",
+    "menu": "قائمة الكتلة"
+  },
+  "bubble": {
+    "bold": "غامق",
+    "italic": "مائل",
+    "underline": "تسطير",
+    "strike": "يتوسطه خط",
+    "code": "كود",
+    "highlight": "تمييز",
+    "link": "رابط",
+    "linkPlaceholder": "https://…",
+    "removeLink": "إزالة الرابط"
+  },
+  "export": {
+    "markdown": "حفظ كـ Markdown…",
+    "copyMarkdown": "نسخ Markdown",
+    "pdf": "طباعة / PDF…"
+  },
+  "models": {
+    "title": "النماذج",
+    "subtitle": "نماذج التفريغ والذكاء الاصطناعي تعمل على هذا الجهاز. تُحمَّل مرة واحدة ولا تحتاج الإنترنت بعدها.",
+    "kind": {
+      "stt": "صوت ← نص (Whisper)",
+      "llm": "نموذج اللغة (ملخص، مهام، خريطة ذهنية)",
+      "runtime": "بيئة التشغيل"
+    },
+    "download": "تحميل",
+    "pause": "إيقاف مؤقت",
+    "resume": "متابعة",
+    "delete": "حذف",
+    "retry": "إعادة المحاولة",
+    "recommended": "موصى به",
+    "needsRam": "يحتاج {{gb}} GB RAM",
+    "ram": "{{gb}} GB RAM",
+    "diskUsed": "على القرص: {{size}}",
+    "folder": "فتح المجلد",
+    "status": {
+      "ready": "جاهز",
+      "paused": "متوقف",
+      "extracting": "جارٍ فك الضغط…",
+      "error": "خطأ"
+    }
+  },
+  "transcript": {
+    "title": "النص المفرّغ",
+    "collapse": "طيّ",
+    "expand": "توسيع",
+    "toText": "تحويل إلى نص",
+    "pending": "جارٍ التفريغ… {{pct}}%"
+  },
+  "ai": {
+    "mindmap": "الخريطة الذهنية",
+    "chart": "رسم بياني",
+    "edit": "تعديل",
+    "done": "تم",
+    "regenerate": "إعادة إنشاء الملاحظة من التسجيل",
+    "summary": "ملخص قصير",
+    "todos": "استخراج المهام",
+    "translate": "ترجمة",
+    "needModels": "تحميل نماذج الذكاء الاصطناعي…"
+  }
+}

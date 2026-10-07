@@ -1,0 +1,174 @@
+{
+  "app": {
+    "name": "PlaudeNote"
+  },
+  "sidebar": {
+    "allNotes": "All Notes",
+    "recent": "Recent",
+    "pinned": "Pinned",
+    "folders": "Folders",
+    "tags": "Tags",
+    "trash": "Recently Deleted",
+    "newFolder": "New Folder",
+    "models": "Models",
+    "modelsMissing": "Not downloaded",
+    "modelsReady": "Ready",
+    "global": "Global",
+    "globalOff": "Off",
+    "globalOn": "On",
+    "modelsPartial": "Partial"
+  },
+  "list": {
+    "search": "Search",
+    "newNote": "New Note",
+    "noNotes": "No Notes",
+    "noResults": "No Results",
+    "pinnedGroup": "Pinned",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "week": "Previous 7 Days",
+    "earlier": "Earlier",
+    "count_one": "{{count}} Note",
+    "count_other": "{{count}} Notes",
+    "newNoteTitle": "New Note"
+  },
+  "editor": {
+    "empty": "No Note Selected",
+    "emptyHint": "Pick a note from the list or create a new one",
+    "titlePlaceholder": "Title",
+    "bodyPlaceholder": "Start writing or record audio…",
+    "ai": "AI",
+    "share": "Share",
+    "bold": "Bold",
+    "italic": "Italic",
+    "list": "List",
+    "checklist": "Checklist",
+    "table": "Table",
+    "image": "Image",
+    "orderedList": "Numbered list"
+  },
+  "record": {
+    "record": "Record",
+    "stop": "Stop",
+    "upload": "Upload audio",
+    "language": "Language",
+    "auto": "Auto",
+    "uz": "O'zbek",
+    "ar": "عربي",
+    "en": "English",
+    "cancel": "Cancel",
+    "dismiss": "Dismiss",
+    "transcribing": "Transcribing… {{pct}}%",
+    "noModel": "No speech model yet — open Models",
+    "openModels": "Models",
+    "summarizing": "AI is writing the note…",
+    "noLlm": "No language model for AI notes — open Models"
+  },
+  "settings": {
+    "title": "Settings",
+    "theme": "Appearance",
+    "system": "System",
+    "light": "Light",
+    "dark": "Dark",
+    "language": "Interface language",
+    "openModels": "Manage Models…"
+  },
+  "menu": {
+    "pin": "Pin Note",
+    "unpin": "Unpin Note",
+    "moveTo": "Move to folder",
+    "noFolder": "No folder",
+    "delete": "Delete",
+    "restore": "Recover",
+    "deleteForever": "Delete Permanently",
+    "rename": "Rename",
+    "deleteFolder": "Delete Folder",
+    "language": "Note language"
+  },
+  "trash": {
+    "banner": "This note is in Recently Deleted. It will be erased after 30 days.",
+    "empty": "Empty"
+  },
+  "slash": {
+    "text": "Text",
+    "h1": "Heading 1",
+    "h2": "Heading 2",
+    "h3": "Heading 3",
+    "bullet": "Bulleted list",
+    "numbered": "Numbered list",
+    "task": "To-do list",
+    "toggle": "Toggle block",
+    "callout": "Callout",
+    "quote": "Quote",
+    "code": "Code block",
+    "table": "Table",
+    "divider": "Divider",
+    "image": "Image",
+    "empty": "No results"
+  },
+  "block": {
+    "turnInto": "Turn into",
+    "duplicate": "Duplicate",
+    "delete": "Delete block",
+    "menu": "Block menu"
+  },
+  "bubble": {
+    "bold": "Bold",
+    "italic": "Italic",
+    "underline": "Underline",
+    "strike": "Strikethrough",
+    "code": "Code",
+    "highlight": "Highlight",
+    "link": "Link",
+    "linkPlaceholder": "https://…",
+    "removeLink": "Remove link"
+  },
+  "export": {
+    "markdown": "Save as Markdown…",
+    "copyMarkdown": "Copy as Markdown",
+    "pdf": "Print / PDF…"
+  },
+  "models": {
+    "title": "Models",
+    "subtitle": "Transcription and AI models run on this Mac. Downloaded once; no internet needed afterwards.",
+    "kind": {
+      "stt": "Speech → text (Whisper)",
+      "llm": "Language model (summary, to-dos, mind map)",
+      "runtime": "Runtime"
+    },
+    "download": "Download",
+    "pause": "Pause",
+    "resume": "Resume",
+    "delete": "Delete",
+    "retry": "Retry",
+    "recommended": "Recommended",
+    "needsRam": "Needs {{gb}} GB RAM",
+    "ram": "{{gb}} GB RAM",
+    "diskUsed": "On disk: {{size}}",
+    "folder": "Open folder",
+    "status": {
+      "ready": "Ready",
+      "paused": "Paused",
+      "extracting": "Unpacking…",
+      "error": "Error"
+    }
+  },
+  "transcript": {
+    "title": "Transcript",
+    "collapse": "Collapse",
+    "expand": "Expand",
+    "toText": "Convert to text",
+    "pending": "Transcribing… {{pct}}%"
+  },
+  "ai": {
+    "mindmap": "Mind map",
+    "chart": "Chart",
+    "edit": "Edit",
+    "done": "Done",
+    "regenerate": "Regenerate note from recording",
+    "summary": "Short summary",
+    "todos": "Extract to-dos",
+    "translate": "Translate",
+    "needModels": "Download AI models…"
+  }
+}

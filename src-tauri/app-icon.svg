@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1c1c1e"/>
+      <stop offset="1" stop-color="#3a3a3c"/>
+    </linearGradient>
+    <linearGradient id="mic" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#d9d9de"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="1024" height="1024" rx="228" fill="url(#bg)"/>
+  <!-- waveform -->
+  <g stroke="#ff453a" stroke-width="44" stroke-linecap="round">
+    <line x1="238" y1="470" x2="238" y2="554"/>
+    <line x1="318" y1="410" x2="318" y2="614"/>
+    <line x1="706" y1="410" x2="706" y2="614"/>
+    <line x1="786" y1="470" x2="786" y2="554"/>
+  </g>
+  <!-- mic capsule -->
+  <rect x="432" y="236" width="160" height="330" rx="80" fill="url(#mic)"/>
+  <path d="M352 460 a160 160 0 0 0 320 0" fill="none" stroke="url(#mic)" stroke-width="44" stroke-linecap="round"/>
+  <line x1="512" y1="620" x2="512" y2="720" stroke="url(#mic)" stroke-width="44" stroke-linecap="round"/>
+  <line x1="420" y1="740" x2="604" y2="740" stroke="url(#mic)" stroke-width="44" stroke-linecap="round"/>
+</svg>

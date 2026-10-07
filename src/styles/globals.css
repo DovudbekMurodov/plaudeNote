@@ -1,0 +1,125 @@
+@import "tailwindcss";
+@import "./tokens.css";
+@import "./editor.css";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+@theme inline {
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-ink: var(--text);
+  --color-ink-2: var(--text-2);
+  --color-ink-3: var(--text-3);
+  --color-on-accent: var(--text-on-accent);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-control: var(--control);
+  --color-control-active: var(--control-active);
+  --color-line: var(--separator);
+  --color-sel: var(--selected);
+
+  --color-sys-red: var(--red);
+  --color-sys-orange: var(--orange);
+  --color-sys-yellow: var(--yellow);
+  --color-sys-green: var(--green);
+  --color-sys-teal: var(--teal);
+  --color-sys-blue: var(--blue);
+  --color-sys-indigo: var(--indigo);
+  --color-sys-purple: var(--purple);
+  --color-sys-pink: var(--pink);
+  --color-sys-gray: var(--gray);
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+
+  --shadow-pop: var(--shadow-pop);
+  --shadow-float: var(--shadow-float);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text);
+  background: transparent;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  user-select: none;
+  -webkit-user-select: none;
+  overflow: hidden;
+  cursor: default;
+}
+
+/* Outside Tauri (plain browser) there is no vibrancy — paint the sidebar colour. */
+html.no-vibrancy body {
+  background: var(--sidebar-fallback);
+}
+
+input,
+textarea,
+[contenteditable] {
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+
+button {
+  cursor: default;
+  font: inherit;
+  color: inherit;
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(127, 127, 127, 0.35);
+  border-radius: 10px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(127, 127, 127, 0.55);
+  background-clip: content-box;
+  border: 3px solid transparent;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Hairline separators look right on retina. */
+.hairline-s {
+  border-inline-start: 0.5px solid var(--separator);
+}
+.hairline-b {
+  border-bottom: 0.5px solid var(--separator);
+}
+.hairline-t {
+  border-top: 0.5px solid var(--separator);
+}
+
+/* Subtle fade-in for panes */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: none; }
+}
+.fade-in {
+  animation: fade-in 160ms ease-out both;
+}

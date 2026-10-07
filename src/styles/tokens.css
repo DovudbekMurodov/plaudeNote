@@ -1,0 +1,112 @@
+/* Apple-style design tokens. Light by default, dark via media query or [data-theme]. */
+:root {
+  color-scheme: light dark;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+    "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --accent: #007aff;
+  --accent-soft: rgba(0, 122, 255, 0.14);
+
+  --text: rgba(0, 0, 0, 0.86);
+  --text-2: rgba(0, 0, 0, 0.55);
+  --text-3: rgba(0, 0, 0, 0.32);
+  --text-on-accent: #ffffff;
+
+  --surface: #ffffff;
+  --surface-2: #f7f7f8;
+  --surface-3: rgba(0, 0, 0, 0.055);
+  --sidebar-fallback: #ececef;
+  --control: rgba(0, 0, 0, 0.06);
+  --control-active: #ffffff;
+
+  --separator: rgba(0, 0, 0, 0.09);
+  --selected: rgba(0, 0, 0, 0.07);
+
+  --red: #ff3b30;
+  --orange: #ff9500;
+  --yellow: #ffcc00;
+  --green: #34c759;
+  --teal: #30b0c7;
+  --blue: #007aff;
+  --indigo: #5856d6;
+  --purple: #af52de;
+  --pink: #ff2d55;
+  --gray: #8e8e93;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.14), 0 0 0 0.5px rgba(0, 0, 0, 0.12);
+  --shadow-float: 0 8px 24px rgba(0, 0, 0, 0.12), 0 0 0 0.5px rgba(0, 0, 0, 0.08);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --accent: #0a84ff;
+    --accent-soft: rgba(10, 132, 255, 0.22);
+
+    --text: rgba(255, 255, 255, 0.88);
+    --text-2: rgba(255, 255, 255, 0.55);
+    --text-3: rgba(255, 255, 255, 0.3);
+
+    --surface: #1e1e1f;
+    --surface-2: #232324;
+    --surface-3: rgba(255, 255, 255, 0.08);
+    --sidebar-fallback: #2a2a2c;
+    --control: rgba(255, 255, 255, 0.09);
+    --control-active: rgba(255, 255, 255, 0.2);
+
+    --separator: rgba(255, 255, 255, 0.1);
+    --selected: rgba(255, 255, 255, 0.09);
+
+    --red: #ff453a;
+    --orange: #ff9f0a;
+    --yellow: #ffd60a;
+    --green: #30d158;
+    --teal: #40c8e0;
+    --blue: #0a84ff;
+    --indigo: #5e5ce6;
+    --purple: #bf5af2;
+    --pink: #ff375f;
+    --gray: #98989d;
+
+    --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.5), 0 0 0 0.5px rgba(255, 255, 255, 0.12);
+    --shadow-float: 0 8px 24px rgba(0, 0, 0, 0.45), 0 0 0 0.5px rgba(255, 255, 255, 0.1);
+  }
+}
+
+:root[data-theme="dark"] {
+  --accent: #0a84ff;
+  --accent-soft: rgba(10, 132, 255, 0.22);
+
+  --text: rgba(255, 255, 255, 0.88);
+  --text-2: rgba(255, 255, 255, 0.55);
+  --text-3: rgba(255, 255, 255, 0.3);
+
+  --surface: #1e1e1f;
+  --surface-2: #232324;
+  --surface-3: rgba(255, 255, 255, 0.08);
+  --sidebar-fallback: #2a2a2c;
+  --control: rgba(255, 255, 255, 0.09);
+  --control-active: rgba(255, 255, 255, 0.2);
+
+  --separator: rgba(255, 255, 255, 0.1);
+  --selected: rgba(255, 255, 255, 0.09);
+
+  --red: #ff453a;
+  --orange: #ff9f0a;
+  --yellow: #ffd60a;
+  --green: #30d158;
+  --teal: #40c8e0;
+  --blue: #0a84ff;
+  --indigo: #5e5ce6;
+  --purple: #bf5af2;
+  --pink: #ff375f;
+  --gray: #98989d;
+
+  --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.5), 0 0 0 0.5px rgba(255, 255, 255, 0.12);
+  --shadow-float: 0 8px 24px rgba(0, 0, 0, 0.45), 0 0 0 0.5px rgba(255, 255, 255, 0.1);
+}
