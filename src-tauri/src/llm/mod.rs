@@ -14,6 +14,11 @@ use tokio::process::{Child, Command};
 use crate::error::{AppError, AppResult};
 use crate::models::find_file;
 
+/// Context window we start `llama-server` with (per slot; we run a single slot).
+/// Qwen3.5 / Gemma 4 use hybrid or sliding-window attention, so 32k costs
+/// well under 1 GB of KV cache even on the 9B model.
+pub const N_CTX: u32 = 32_768;
+
 struct Running {
     child: Child,
     port: u16,
@@ -125,7 +130,13 @@ impl LlmServer {
             .arg("--port")
             .arg(port.to_string())
             .arg("-c")
-            .arg("16384")
+            .arg(N_CTX.to_string())
+            // One slot: the app serialises LLM jobs anyway, and llama-server's
+            // auto `-np` would otherwise allocate 4 × N_CTX of KV cache.
+            .arg("-np")
+            .arg("1")
+            .arg("-fa")
+            .arg("on")
             .arg("-ngl")
             .arg("99")
             .arg("-t")
@@ -205,7 +216,26 @@ async fn health(port: u16) -> bool {
     }
 }
 
+/// Exact token count of `text` for the loaded model (`/tokenize`).
+pub async fn count_tokens(port: u16, text: &str) -> AppResult<usize> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(60))
+        .build()
+        .map_err(|e| AppError::Other(e.to_string()))?;
+    let v: Value = client
+        .post(format!("http://127.0.0.1:{port}/tokenize"))
+        .json(&json!({ "content": text, "add_special": false }))
+        .send()
+        .await
+        .map_err(|e| AppError::Other(format!("tokenize failed: {e}")))?
+        .json()
+        .await
+        .map_err(|e| AppError::Other(format!("tokenize response: {e}")))?;
+    Ok(v["tokens"].as_array().map(|a| a.len()).unwrap_or(0))
+}
+
 /// One grammar-constrained chat completion. Returns the parsed JSON object.
+/// `AppError::LlmTruncated` when the model ran out of `max_tokens` mid-answer.
 pub async fn complete_json(port: u16, system: &str, user: &str, schema: &Value, max_tokens: u32) -> AppResult<Value> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(600))
@@ -236,6 +266,9 @@ pub async fn complete_json(port: u16, system: &str, user: &str, schema: &Value, 
         return Err(AppError::Other(format!("llm HTTP {status}: {}", text.chars().take(300).collect::<String>())));
     }
     let v: Value = serde_json::from_str(&text).map_err(|e| AppError::Other(format!("llm response not JSON: {e}")))?;
+    if v["choices"][0]["finish_reason"].as_str() == Some("length") {
+        return Err(AppError::LlmTruncated);
+    }
     let content = v["choices"][0]["message"]["content"]
         .as_str()
         .ok_or_else(|| AppError::Other("llm response missing content".into()))?;

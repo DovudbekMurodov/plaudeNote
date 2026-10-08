@@ -37,7 +37,7 @@ pub fn language_name(code: &str) -> &'static str {
     }
 }
 
-fn node_schema(depth: u8) -> Value {
+fn node_schema(depth: u8, max_children: usize) -> Value {
     if depth == 0 {
         json!({ "type": "object", "properties": { "name": { "type": "string" } }, "required": ["name"] })
     } else {
@@ -45,15 +45,17 @@ fn node_schema(depth: u8) -> Value {
             "type": "object",
             "properties": {
                 "name": { "type": "string" },
-                "children": { "type": "array", "items": node_schema(depth - 1), "maxItems": 8 }
+                "children": { "type": "array", "items": node_schema(depth - 1, 5), "maxItems": max_children }
             },
             "required": ["name", "children"]
         })
     }
 }
 
+/// root → ≤6 branches → ≤5 leaves. Bounded on purpose: an unbounded tree is
+/// where a chatty model burns its whole token budget.
 pub fn mindmap_schema() -> Value {
-    node_schema(3)
+    node_schema(2, 6)
 }
 
 pub fn chart_schema() -> Value {
@@ -160,7 +162,7 @@ pub fn build(task: Task, input: &str, lang: &str, target_lang: Option<&str>, ext
             ),
             user: input.to_string(),
             schema: note_schema(),
-            max_tokens: 3000,
+            max_tokens: 5000,
         },
         Task::Mindmap => Prompt {
             system: format!("{base} Produce a mind map: root = the topic, 3–7 branches, each with 2–6 short leaves (names ≤ 6 words)."),
@@ -178,7 +180,7 @@ pub fn build(task: Task, input: &str, lang: &str, target_lang: Option<&str>, ext
             system: format!("{base} Write a tight summary of the input in 3–6 sentences as plain text (field `text`)."),
             user: input.to_string(),
             schema: text_schema(),
-            max_tokens: 800,
+            max_tokens: 1000,
         },
         Task::Translate => {
             let to = language_name(target_lang.unwrap_or("en"));
@@ -189,7 +191,7 @@ pub fn build(task: Task, input: &str, lang: &str, target_lang: Option<&str>, ext
                 ),
                 user: input.to_string(),
                 schema: text_schema(),
-                max_tokens: 4000,
+                max_tokens: 6000,
             }
         }
         Task::Ask => {
@@ -203,8 +205,58 @@ pub fn build(task: Task, input: &str, lang: &str, target_lang: Option<&str>, ext
                 ),
                 user: format!("TRANSCRIPT:\n{input}\n\nQUESTION / INSTRUCTION:\n{question}"),
                 schema: text_schema(),
-                max_tokens: 2500,
+                max_tokens: 3000,
             }
         }
     }
+}
+
+/// Map step for long recordings: condense one part of the transcript into
+/// dense notes (or, for `Ask`, into everything relevant to the question).
+/// The reduce step then runs the real task over the joined part notes.
+pub fn build_part(task: Task, input: &str, lang: &str, target_lang: Option<&str>, extra: &Extra, part: usize, total: usize) -> Prompt {
+    if task == Task::Translate {
+        // Translation needs no reduce: translate each part, concatenate.
+        return build(task, input, lang, target_lang, extra);
+    }
+    let out_code = match target_lang {
+        Some(t) if !t.is_empty() && t != "auto" => t,
+        _ => lang,
+    };
+    let out_lang = language_name(out_code);
+    let goal = match task {
+        Task::Ask => format!(
+            "Extract everything in this part that is relevant to the following question or instruction, with the exact facts, names, \
+             numbers and quotes needed to answer it. If nothing in this part is relevant, write a single line saying so.\n\
+             QUESTION / INSTRUCTION:\n{}",
+            extra.question.unwrap_or("").trim()
+        ),
+        Task::Todos => "List every task, commitment, promise, deadline or follow-up mentioned in this part, each with who is responsible and when, if said.".to_string(),
+        _ => "Write detailed, faithful notes of this part: every topic in order, the facts, names, numbers, examples, tasks, commitments and decisions. \
+              Keep everything that a reader would need to summarise the whole recording later; drop only filler and repetition."
+            .to_string(),
+    };
+    Prompt {
+        system: format!(
+            "You are condensing part {part} of {total} of a long voice-recording transcript (it may contain speech-recognition mistakes; \
+             silently fix obvious ones). Write in {out_lang}. Never add facts that are not in the input. Plain text with short paragraphs \
+             or '-' lists, no headings, no introduction. Respond with JSON only: {{\"text\": \"<notes>\"}}. {goal}"
+        ),
+        user: input.to_string(),
+        schema: text_schema(),
+        max_tokens: 1200,
+    }
+}
+
+/// Reduce step: the real task, but the input is the joined part notes rather than a raw transcript.
+pub fn build_from_notes(task: Task, notes: &str, lang: &str, target_lang: Option<&str>, extra: &Extra) -> Prompt {
+    let mut p = build(task, notes, lang, target_lang, extra);
+    p.system = p.system.replace(
+        "The input is a transcript of a voice recording (it may contain speech-recognition mistakes; silently fix obvious ones).",
+        "The input is a set of condensed notes compiled, in order, from the parts of one long voice recording.",
+    );
+    if task == Task::Ask {
+        p.user = p.user.replacen("TRANSCRIPT:\n", "NOTES FROM THE RECORDING (in order):\n", 1);
+    }
+    p
 }

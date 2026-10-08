@@ -12,6 +12,9 @@ pub enum AppError {
     Other(String),
     #[error("cancelled")]
     Cancelled,
+    /// The model hit its output token budget before finishing (JSON cut mid-way).
+    #[error("llm output truncated: answer longer than the token budget")]
+    LlmTruncated,
 }
 
 impl From<tauri::Error> for AppError {
