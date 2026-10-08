@@ -157,7 +157,9 @@
       "error": "Xato"
     },
     "diskFree": "bo'sh joy {{size}}",
-    "noSpace": "Diskda joy yetarli emas ({{size}} kerak)"
+    "noSpace": "Diskda joy yetarli emas ({{size}} kerak)",
+    "onlyLangs": "Faqat {{langs}}",
+    "importFile": "Fayldan qo'shish…"
   },
   "transcript": {
     "title": "Transkript",

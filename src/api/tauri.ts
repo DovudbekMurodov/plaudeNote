@@ -33,6 +33,7 @@ export const tauriApi: Api = {
   modelDownload: (id) => invoke("model_download", { id }),
   modelPause: (id) => invoke("model_pause", { id }),
   modelDelete: (id) => invoke("model_delete", { id }),
+  modelImportFile: (id) => invoke("model_import_file", { id }),
   systemInfo: () => invoke("system_info"),
   openModelsWindow: () => invoke("open_models_window"),
   revealModelsDir: () => invoke("reveal_models_dir"),

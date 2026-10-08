@@ -81,6 +81,8 @@ export interface ModelInfo {
   size: number;
   minRamGb: number;
   langs: string;
+  /** Specialised model: only used for these languages (null = general). */
+  langsOnly: string[] | null;
   archive: boolean;
   defaultFor16gb: boolean;
   defaultFor8gb: boolean;
@@ -113,6 +115,8 @@ export interface ModelsApi {
   modelDownload(id: string): Promise<void>;
   modelPause(id: string): Promise<void>;
   modelDelete(id: string): Promise<void>;
+  /** Install a model from a local file (file picker). */
+  modelImportFile(id: string): Promise<void>;
   systemInfo(): Promise<SystemInfo>;
   openModelsWindow(): Promise<void>;
   revealModelsDir(): Promise<void>;

@@ -12,6 +12,7 @@ interface ModelsState {
   download(id: string): Promise<void>;
   pause(id: string): Promise<void>;
   remove(id: string): Promise<void>;
+  importFile(id: string): Promise<void>;
 }
 
 export const useModels = create<ModelsState>()((set, get) => ({
@@ -71,6 +72,14 @@ export const useModels = create<ModelsState>()((set, get) => ({
     await api.modelDelete(id).catch(console.error);
     await get().refresh();
   },
+  async importFile(id) {
+    try {
+      await api.modelImportFile(id);
+    } catch (e) {
+      set((s) => ({ models: s.models.map((m) => (m.id === id ? { ...m, status: "error", error: String(e) } : m)) }));
+    }
+    await get().refresh();
+  },
 }));
 
 /** Which kinds have at least one ready model. */
@@ -97,5 +106,5 @@ export function summary(models: ModelInfo[]): { state: "ready" | "partial" | "do
 
 export function recommendedId(models: ModelInfo[], kind: ModelKind, ramGb: number | undefined): string | undefined {
   const big = (ramGb ?? 16) >= 16;
-  return models.find((m) => m.kind === kind && (big ? m.defaultFor16gb : m.defaultFor8gb))?.id;
+  return models.find((m) => m.kind === kind && !m.langsOnly && (big ? m.defaultFor16gb : m.defaultFor8gb))?.id;
 }

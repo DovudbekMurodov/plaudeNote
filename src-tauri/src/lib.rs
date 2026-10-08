@@ -95,6 +95,7 @@ pub fn run() {
             commands::model_download,
             commands::model_pause,
             commands::model_delete,
+            commands::model_import_file,
             commands::system_info,
             commands::open_models_window,
             commands::reveal_models_dir,

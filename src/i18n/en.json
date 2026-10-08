@@ -157,7 +157,9 @@
       "error": "Error"
     },
     "diskFree": "{{size}} free",
-    "noSpace": "Not enough disk space ({{size}} needed)"
+    "noSpace": "Not enough disk space ({{size}} needed)",
+    "onlyLangs": "{{langs}} only",
+    "importFile": "Add from file…"
   },
   "transcript": {
     "title": "Transcript",

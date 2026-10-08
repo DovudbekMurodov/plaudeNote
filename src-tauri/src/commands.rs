@@ -415,3 +415,26 @@ pub fn attachment_import(app: AppHandle, path: String) -> AppResult<String> {
     std::fs::copy(&src, &dest)?;
     Ok(dest.to_string_lossy().into_owned())
 }
+
+
+/// Install a model from a local file (for models that have no download URL yet,
+/// or when the user already has the file). Copies it into the models folder.
+#[tauri::command]
+pub async fn model_import_file(app: AppHandle, id: String) -> AppResult<()> {
+    let spec = crate::models::registry::find(&id).ok_or_else(|| AppError::NotFound(format!("model {id}")))?;
+    let picked = pick_media_files(format!("{} — {}", spec.name, spec.file)).await?;
+    let Some(src) = picked.into_iter().next() else { return Ok(()) };
+    let models = Arc::clone(&*app.state::<Arc<ModelManager>>());
+    let dest = models.target_path(spec);
+    let size = std::fs::metadata(&src)?.len();
+    if size != spec.size {
+        return Err(AppError::Other(format!(
+            "wrong file: expected {} bytes ({}), got {}",
+            spec.size, spec.file, size
+        )));
+    }
+    tauri::async_runtime::spawn_blocking(move || std::fs::copy(&src, &dest).map(|_| ()))
+        .await
+        .map_err(|e| AppError::Other(e.to_string()))??;
+    Ok(())
+}

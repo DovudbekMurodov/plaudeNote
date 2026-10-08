@@ -233,6 +233,11 @@ export const mockApi: Api = {
     m.bytesPerSec = 0;
     emitProgress(m);
   },
+  async modelImportFile(id) {
+    const m = MOCK_MODELS.find((x) => x.id === id);
+    if (m) Object.assign(m, { status: "ready", downloadedBytes: m.size, path: `/mock/models/${m.kind}/${m.file}` });
+    if (m) emitProgress(m);
+  },
   async modelDelete(id) {
     const m = MOCK_MODELS.find((x) => x.id === id);
     if (!m) return;
@@ -436,7 +441,8 @@ function emitProgress(m: ModelInfo) {
 }
 // Browser dev: pretend the recommended stack is already installed so the whole flow is clickable.
 const PRE_INSTALLED = new Set(["whisper-large-v3-turbo-q5", "qwen3.5-4b-q4", "llama-server"]);
-const model = (m: Omit<ModelInfo, "status" | "downloadedBytes" | "bytesPerSec" | "error" | "path">): ModelInfo => ({
+const model = (m: Omit<ModelInfo, "status" | "downloadedBytes" | "bytesPerSec" | "error" | "path" | "langsOnly"> & { langsOnly?: string[] }): ModelInfo => ({
+  langsOnly: null,
   ...m,
   status: PRE_INSTALLED.has(m.id) ? "ready" : "missing",
   downloadedBytes: PRE_INSTALLED.has(m.id) ? m.size : 0,
@@ -446,6 +452,8 @@ const model = (m: Omit<ModelInfo, "status" | "downloadedBytes" | "bytesPerSec" |
 });
 const MOCK_MODELS: ModelInfo[] = [
   model({ id: "whisper-large-v3-turbo-q5", kind: "stt", name: "Whisper large-v3 turbo", description: "Best quality for Uzbek and Arabic. Q5_0 quantised.", file: "ggml-large-v3-turbo-q5_0.bin", url: "", size: 574_041_195, minRamGb: 8, langs: "uz, ar, en +96", archive: false, defaultFor16gb: true, defaultFor8gb: true }),
+  model({ id: "whisper-uzbek-kotib-medium", kind: "stt", name: "Whisper Uzbek (Kotib, medium)", description: "Fine-tuned on 1,600 h of Uzbek speech. Dramatically better Uzbek than turbo; Uzbek only.", file: "ggml-uzbek-kotib-medium-q5_0.bin", url: "", size: 539_212_484, minRamGb: 8, langs: "uz", langsOnly: ["uz"], archive: false, defaultFor16gb: true, defaultFor8gb: true }),
+  model({ id: "whisper-uzbek-rubai-medium", kind: "stt", name: "Whisper Uzbek (rubaiSTT v2, medium)", description: "Tashkent-dialect podcasts and news (475 h). Alternative to Kotib; Uzbek only.", file: "ggml-uzbek-rubai-medium-q5_0.bin", url: "", size: 539_212_484, minRamGb: 8, langs: "uz", langsOnly: ["uz"], archive: false, defaultFor16gb: false, defaultFor8gb: false }),
   model({ id: "whisper-small-q5", kind: "stt", name: "Whisper small", description: "Fast, lower accuracy. Good for quick drafts.", file: "ggml-small-q5_1.bin", url: "", size: 190_085_487, minRamGb: 4, langs: "uz, ar, en +96", archive: false, defaultFor16gb: false, defaultFor8gb: false }),
   model({ id: "qwen3.5-4b-q4", kind: "llm", name: "Qwen3.5 4B", description: "Summaries, to-dos and mind maps. 201 languages. Fits 8 GB Macs.", file: "Qwen3.5-4B-Q4_K_M.gguf", url: "", size: 2_740_937_888, minRamGb: 8, langs: "uz, ar, en +198", archive: false, defaultFor16gb: false, defaultFor8gb: true }),
   model({ id: "qwen3.5-9b-q4", kind: "llm", name: "Qwen3.5 9B", description: "Noticeably better Uzbek. Needs 16 GB.", file: "Qwen3.5-9B-Q4_K_M.gguf", url: "", size: 5_680_522_464, minRamGb: 16, langs: "uz, ar, en +198", archive: false, defaultFor16gb: true, defaultFor8gb: false }),

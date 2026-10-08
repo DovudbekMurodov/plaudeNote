@@ -26,10 +26,10 @@ pub struct SttResult {
     pub text: String,
 }
 
-/// Keeps the last loaded model in memory (loading takes seconds).
+/// Keeps the last two loaded models in memory (general + specialised), loading takes seconds.
 #[derive(Default)]
 pub struct Stt {
-    ctx: Mutex<Option<(PathBuf, Arc<WhisperContext>)>>,
+    ctx: Mutex<Vec<(PathBuf, Arc<WhisperContext>)>>,
 }
 
 static LOGGING: Once = Once::new();
@@ -65,10 +65,8 @@ impl Stt {
     fn context(&self, model: &Path) -> AppResult<Arc<WhisperContext>> {
         LOGGING.call_once(whisper_rs::install_logging_hooks);
         let mut guard = self.ctx.lock().map_err(|_| AppError::Other("stt lock".into()))?;
-        if let Some((p, c)) = guard.as_ref() {
-            if p == model {
-                return Ok(Arc::clone(c));
-            }
+        if let Some((_, c)) = guard.iter().find(|(p, _)| p == model) {
+            return Ok(Arc::clone(c));
         }
         let mut params = WhisperContextParameters::new();
         params.use_gpu(true);
@@ -78,8 +76,44 @@ impl Stt {
         )
         .map_err(|e| AppError::Other(format!("cannot load whisper model: {e:?}")))?;
         let ctx = Arc::new(ctx);
-        *guard = Some((model.to_path_buf(), Arc::clone(&ctx)));
+        if guard.len() >= 2 {
+            guard.remove(0);
+        }
+        guard.push((model.to_path_buf(), Arc::clone(&ctx)));
         Ok(ctx)
+    }
+
+    /// Language probabilities from the first ~30 s, best first (ISO-639-1 codes).
+    pub fn detect_language_probs(&self, model: &Path, wav: &Path) -> AppResult<Vec<(String, f32)>> {
+        let ctx = self.context(model)?;
+        let samples = read_wav_f32(wav)?;
+        if samples.len() < 16_000 {
+            return Ok(Vec::new());
+        }
+        // Skip a little lead-in silence/music, then one 30 s window.
+        let start = (samples.len() / 10).min(5 * 16_000);
+        let end = (start + 30 * 16_000).min(samples.len());
+        let mut state = ctx.create_state().map_err(|e| AppError::Other(format!("whisper state: {e:?}")))?;
+        let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).min(8);
+        state
+            .pcm_to_mel(&samples[start..end], threads)
+            .map_err(|e| AppError::Other(format!("mel: {e:?}")))?;
+        let (_id, probs) = state
+            .lang_detect(0, threads)
+            .map_err(|e| AppError::Other(format!("lang detect: {e:?}")))?;
+        let mut v: Vec<(String, f32)> = probs
+            .iter()
+            .enumerate()
+            .filter_map(|(i, p)| whisper_rs::get_lang_str(i as i32).map(|l| (l.to_string(), *p)))
+            .collect();
+        v.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        v.truncate(8);
+        Ok(v)
+    }
+
+    /// Detect the spoken language from the first ~30 s. Returns ISO-639-1 ("uz", "ar"…).
+    pub fn detect_language(&self, model: &Path, wav: &Path) -> AppResult<Option<String>> {
+        Ok(self.detect_language_probs(model, wav)?.into_iter().next().map(|(l, _)| l))
     }
 
     /// `lang`: "auto" | ISO-639-1 ("uz", "ar", …). Blocking — call from `spawn_blocking`.
@@ -89,6 +123,19 @@ impl Stt {
         model: &Path,
         wav: &Path,
         lang: &str,
+        cancel: Arc<AtomicBool>,
+        mut on_progress: impl FnMut(i32) + Send + 'static,
+    ) -> AppResult<SttResult> {
+        self.transcribe_with(model, wav, lang, true, cancel, on_progress)
+    }
+
+    /// `primer`: feed the in-language primer sentence (helps general models, not fine-tunes).
+    pub fn transcribe_with(
+        &self,
+        model: &Path,
+        wav: &Path,
+        lang: &str,
+        primer: bool,
         cancel: Arc<AtomicBool>,
         mut on_progress: impl FnMut(i32) + Send + 'static,
     ) -> AppResult<SttResult> {
@@ -117,8 +164,10 @@ impl Stt {
         params.set_suppress_nst(true);
         params.set_token_timestamps(false);
         params.set_no_speech_thold(0.6);
-        if let Some(p) = initial_prompt(&lang_owned) {
-            params.set_initial_prompt(p);
+        if primer {
+            if let Some(p) = initial_prompt(&lang_owned) {
+                params.set_initial_prompt(p);
+            }
         }
         let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).min(8) as i32;
         params.set_n_threads(threads);
@@ -204,6 +253,22 @@ mod tests {
             println!("[{:>6} → {:>6}] {}", s.start_ms, s.end_ms, s.text);
         }
         assert!(!res.segments.is_empty(), "no segments");
+    }
+
+    /// Print language probabilities for every wav in PLAUDENOTE_TEST_DIR.
+    #[test]
+    #[ignore]
+    fn language_probs() {
+        let model = std::env::var("PLAUDENOTE_TEST_MODEL").expect("PLAUDENOTE_TEST_MODEL");
+        let dir = std::env::var("PLAUDENOTE_TEST_DIR").expect("PLAUDENOTE_TEST_DIR");
+        let stt = Stt::default();
+        let mut files: Vec<_> = std::fs::read_dir(&dir).unwrap().flatten().map(|e| e.path()).filter(|p| p.to_string_lossy().ends_with(".16k.wav")).collect();
+        files.sort();
+        for f in files {
+            let probs = stt.detect_language_probs(Path::new(&model), &f).unwrap();
+            let top: Vec<String> = probs.iter().take(5).map(|(l, p)| format!("{l}={p:.2}")).collect();
+            println!("{}: {}", f.file_name().unwrap().to_string_lossy(), top.join(" "));
+        }
     }
 
     /// Cancellation must stop a long transcription quickly.

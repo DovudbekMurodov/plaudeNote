@@ -166,17 +166,40 @@ async fn run(
     }
 
     let models = Arc::clone(&*app.state::<Arc<ModelManager>>());
-    let model_path = models
-        .ready_path(ModelKind::Stt)
-        .ok_or_else(|| AppError::Other("no speech model downloaded".into()))?;
-    let model_name = model_path.file_name().map(|f| f.to_string_lossy().into_owned());
+    let general = models.ready_path(ModelKind::Stt);
+    let stt = Arc::clone(&*app.state::<Arc<Stt>>());
+    let wav = std::path::PathBuf::from(&wav_path);
 
     let db = app.state::<Db>();
     let _ = db.with(|c| recordings::update_job(c, &ctx.job_id, "running", 0.0, None));
     emit_job(app, ctx.ev("running", 0.0, None));
 
-    let stt = Arc::clone(&*app.state::<Arc<Stt>>());
-    let wav = std::path::PathBuf::from(&wav_path);
+    // "auto": let the general model identify the language first, so a specialised
+    // model (e.g. the Uzbek fine-tune) can take over when one is installed.
+    // Whisper is confident on well-resourced languages (en/ar/ru ≈ 1.0) but hedges on
+    // Uzbek (en 0.4, az 0.4 …), so low confidence or a Turkic guess both mean "try Uzbek".
+    let mut lang = lang;
+    if lang == "auto" {
+        if let Some(g) = general.clone() {
+            let stt2 = Arc::clone(&stt);
+            let wav2 = wav.clone();
+            if let Ok(Ok(probs)) = tauri::async_runtime::spawn_blocking(move || stt2.detect_language_probs(&g, &wav2)).await {
+                if let Some((top, p)) = probs.first() {
+                    let turkic = ["uz", "az", "tr", "kk", "ky", "tt", "tk", "ug", "ba"];
+                    let candidate = if turkic.contains(&top.as_str()) || *p < 0.6 { "uz" } else { top.as_str() };
+                    if models.ready_specialised(ModelKind::Stt, candidate).is_some() {
+                        lang = candidate.to_string();
+                    }
+                }
+            }
+        }
+    }
+    let specialised = if lang == "auto" { None } else { models.ready_specialised(ModelKind::Stt, &lang) };
+    let primer = specialised.is_none();
+    let model_path = specialised
+        .or(general.clone())
+        .ok_or_else(|| AppError::Other("no speech model downloaded".into()))?;
+    let model_name = model_path.file_name().map(|f| f.to_string_lossy().into_owned());
     let progress_app = app.clone();
     let pctx = Ctx {
         job_id: ctx.job_id.clone(),
@@ -185,7 +208,7 @@ async fn run(
     };
     let lang_for_task = lang.clone();
     let res = tauri::async_runtime::spawn_blocking(move || {
-        stt.transcribe(&model_path, &wav, &lang_for_task, cancel, move |p| {
+        stt.transcribe_with(&model_path, &wav, &lang_for_task, primer, cancel, move |p| {
             emit_job(&progress_app, pctx.ev("running", (p as f64 / 100.0).clamp(0.0, 1.0), None));
         })
     })

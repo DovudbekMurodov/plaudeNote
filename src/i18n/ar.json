@@ -161,7 +161,9 @@
       "error": "خطأ"
     },
     "diskFree": "المساحة الحرة {{size}}",
-    "noSpace": "لا توجد مساحة كافية (يلزم {{size}})"
+    "noSpace": "لا توجد مساحة كافية (يلزم {{size}})",
+    "onlyLangs": "{{langs}} فقط",
+    "importFile": "إضافة من ملف…"
   },
   "transcript": {
     "title": "النص المفرّغ",

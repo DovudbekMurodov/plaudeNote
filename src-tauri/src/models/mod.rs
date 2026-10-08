@@ -103,11 +103,20 @@ impl ModelManager {
         }
     }
 
-    /// First ready model of a kind, preferring the registry order.
+    /// First ready *general* model of a kind, preferring the registry order.
     pub fn ready_path(&self, kind: ModelKind) -> Option<PathBuf> {
         REGISTRY
             .iter()
-            .filter(|s| s.kind == kind && self.is_ready(s))
+            .filter(|s| s.kind == kind && s.langs_only.is_none() && self.is_ready(s))
+            .map(|s| self.target_path(s))
+            .next()
+    }
+
+    /// A ready model specialised for `lang` (e.g. the Uzbek fine-tune), if any.
+    pub fn ready_specialised(&self, kind: ModelKind, lang: &str) -> Option<PathBuf> {
+        REGISTRY
+            .iter()
+            .filter(|s| s.kind == kind && s.langs_only.map(|l| l.contains(&lang)).unwrap_or(false) && self.is_ready(s))
             .map(|s| self.target_path(s))
             .next()
     }

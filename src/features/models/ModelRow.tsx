@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, Check, Download, Pause, Play, Trash2 } from "lucide-react";
+import { AlertTriangle, Check, Download, FolderInput, Pause, Play, Trash2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { useModels } from "@/store/models";
 import type { ModelInfo } from "@/api";
@@ -19,6 +19,7 @@ export function ModelRow({ model: m, recommended, ramGb, diskFree, first }: Prop
   const download = useModels((s) => s.download);
   const pause = useModels((s) => s.pause);
   const remove = useModels((s) => s.remove);
+  const importFile = useModels((s) => s.importFile);
 
   const pct = m.size ? m.downloadedBytes / m.size : 0;
   const busy = m.status === "downloading" || m.status === "extracting";
@@ -32,6 +33,7 @@ export function ModelRow({ model: m, recommended, ramGb, diskFree, first }: Prop
         <div className="flex items-center gap-2">
           <span className="text-[13px] font-semibold">{m.name}</span>
           {recommended && <Badge tone="accent">{t("models.recommended")}</Badge>}
+          {m.langsOnly && <Badge tone="accent">{t("models.onlyLangs", { langs: m.langsOnly.map((l) => l.toUpperCase()).join(", ") })}</Badge>}
           {m.status === "ready" && (
             <Badge tone="green">
               <Check className="me-0.5 size-3" strokeWidth={3} />
@@ -88,10 +90,17 @@ export function ModelRow({ model: m, recommended, ramGb, diskFree, first }: Prop
             </IconButton>
           </>
         ) : m.status === "missing" || m.status === "error" ? (
-          <Button variant="primary" size="sm" disabled={noSpace} onClick={() => void download(m.id)}>
-            <Download className="size-3.5" strokeWidth={2.2} />
-            {m.status === "error" ? t("models.retry") : t("models.download")}
-          </Button>
+          <>
+            {m.url && (
+              <Button variant="primary" size="sm" disabled={noSpace} onClick={() => void download(m.id)}>
+                <Download className="size-3.5" strokeWidth={2.2} />
+                {m.status === "error" ? t("models.retry") : t("models.download")}
+              </Button>
+            )}
+            <IconButton size="sm" title={t("models.importFile")} onClick={() => void importFile(m.id)}>
+              <FolderInput />
+            </IconButton>
+          </>
         ) : m.status === "paused" ? (
           <>
             <Button variant="primary" size="sm" disabled={noSpace} onClick={() => void download(m.id)}>
