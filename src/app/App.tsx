@@ -3,6 +3,7 @@ import { useUI } from "@/store/ui";
 import { useNotes } from "@/store/notes";
 import { useModels } from "@/store/models";
 import { useAppearance } from "./useAppearance";
+import { useDragDrop } from "./useDragDrop";
 import { AppShell } from "./AppShell";
 
 /** Keeps the notes store in step with sidebar selection, search and the selected note. */
@@ -48,6 +49,7 @@ export function App() {
   useAppearance();
   useNotesSync();
   useShortcuts();
+  useDragDrop();
 
   const startModels = useModels((s) => s.start);
   useEffect(() => startModels(), [startModels]);

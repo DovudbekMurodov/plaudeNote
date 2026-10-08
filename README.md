@@ -9,17 +9,23 @@ no accounts, nothing leaves the Mac.
 Tauri 2 (Rust) · React 19 · TypeScript · Tailwind 4 · Tiptap 3 · ECharts · SQLite ·
 whisper.cpp (`whisper-rs`) · llama.cpp (`llama-server` sidecar)
 
-## Develop
+## Run
+
+One command (installs deps on first run, cleans up leftovers, starts dev mode):
+
+```bash
+./run.sh
+```
+
+Build the DMG:
+
+```bash
+./run.sh --build
+```
+
+Equivalent npm scripts: `pnpm start`, `pnpm build:app`.
 
 Prerequisites: Node 24+, pnpm, Rust (`rustup`), Xcode Command Line Tools.
-
-```bash
-pnpm install
-```
-
-```bash
-pnpm tauri dev
-```
 
 `pnpm dev` alone serves the UI in a browser at http://localhost:1420 (no vibrancy, no native APIs).
 

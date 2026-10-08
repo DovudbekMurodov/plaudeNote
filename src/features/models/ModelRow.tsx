@@ -10,10 +10,11 @@ interface Props {
   model: ModelInfo;
   recommended: boolean;
   ramGb: number | undefined;
+  diskFree: number | null;
   first: boolean;
 }
 
-export function ModelRow({ model: m, recommended, ramGb, first }: Props) {
+export function ModelRow({ model: m, recommended, ramGb, diskFree, first }: Props) {
   const { t } = useTranslation();
   const download = useModels((s) => s.download);
   const pause = useModels((s) => s.pause);
@@ -22,6 +23,8 @@ export function ModelRow({ model: m, recommended, ramGb, first }: Props) {
   const pct = m.size ? m.downloadedBytes / m.size : 0;
   const busy = m.status === "downloading" || m.status === "extracting";
   const tooBig = ramGb !== undefined && m.minRamGb > ramGb;
+  const remaining = Math.max(0, m.size - m.downloadedBytes);
+  const noSpace = m.status !== "ready" && diskFree !== null && diskFree < remaining + 300_000_000;
 
   return (
     <div className={cn("flex items-start gap-3 px-3 py-2.5", !first && "hairline-t")}>
@@ -36,6 +39,7 @@ export function ModelRow({ model: m, recommended, ramGb, first }: Props) {
             </Badge>
           )}
           {tooBig && <Badge tone="orange">{t("models.needsRam", { gb: m.minRamGb })}</Badge>}
+          {noSpace && <Badge tone="red">{t("models.noSpace", { size: formatBytes(remaining) })}</Badge>}
         </div>
         <div className="mt-0.5 text-[12px] text-ink-2">{m.description}</div>
         <div className="mt-0.5 text-[11px] text-ink-3">
@@ -44,7 +48,7 @@ export function ModelRow({ model: m, recommended, ramGb, first }: Props) {
           {m.minRamGb > 0 && ` · ${t("models.ram", { gb: m.minRamGb })}`}
         </div>
 
-        {(busy || m.status === "paused") && (
+        {(busy || m.status === "paused" || (m.status === "error" && m.downloadedBytes > 0)) && (
           <div className="mt-2">
             <ProgressBar value={pct} indeterminate={m.status === "extracting"} />
             <div className="mt-1 flex justify-between text-[11px] tabular-nums text-ink-3">
@@ -73,14 +77,24 @@ export function ModelRow({ model: m, recommended, ramGb, first }: Props) {
       </div>
 
       <div className="flex shrink-0 items-center gap-1 pt-0.5">
-        {m.status === "missing" || m.status === "error" ? (
-          <Button variant="primary" size="sm" onClick={() => void download(m.id)}>
+        {m.status === "error" && m.downloadedBytes > 0 ? (
+          <>
+            <Button variant="primary" size="sm" disabled={noSpace} onClick={() => void download(m.id)}>
+              <Play className="size-3.5" strokeWidth={2.2} />
+              {t("models.resume")}
+            </Button>
+            <IconButton size="sm" title={t("models.delete")} onClick={() => void remove(m.id)}>
+              <Trash2 />
+            </IconButton>
+          </>
+        ) : m.status === "missing" || m.status === "error" ? (
+          <Button variant="primary" size="sm" disabled={noSpace} onClick={() => void download(m.id)}>
             <Download className="size-3.5" strokeWidth={2.2} />
             {m.status === "error" ? t("models.retry") : t("models.download")}
           </Button>
         ) : m.status === "paused" ? (
           <>
-            <Button variant="primary" size="sm" onClick={() => void download(m.id)}>
+            <Button variant="primary" size="sm" disabled={noSpace} onClick={() => void download(m.id)}>
               <Play className="size-3.5" strokeWidth={2.2} />
               {t("models.resume")}
             </Button>

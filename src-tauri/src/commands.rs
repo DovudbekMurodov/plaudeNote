@@ -137,7 +137,16 @@ pub fn model_pause(models: State<'_, Arc<ModelManager>>, id: String) -> AppResul
 }
 
 #[tauri::command]
-pub fn model_delete(models: State<'_, Arc<ModelManager>>, id: String) -> AppResult<()> {
+pub async fn model_delete(app: AppHandle, id: String) -> AppResult<()> {
+    let models = Arc::clone(&*app.state::<Arc<ModelManager>>());
+    let llm = Arc::clone(&*app.state::<Arc<LlmServer>>());
+    // A model that llama-server has open would be unlinked but keep its disk space.
+    if let Some(spec) = crate::models::registry::find(&id) {
+        let path = models.target_path(spec);
+        tauri::async_runtime::spawn_blocking(move || llm.stop_if_model(&path))
+            .await
+            .map_err(|e| AppError::Other(e.to_string()))?;
+    }
     models.delete(&id)
 }
 
@@ -192,11 +201,20 @@ pub struct RecordingStarted {
     pub path: String,
 }
 
+// Recording commands are `async` so they run off the main thread: opening the
+// microphone can block while macOS shows the permission prompt, and the prompt
+// itself needs the main thread.
+
 #[tauri::command]
-pub fn recording_start(app: AppHandle, recorder: State<'_, Arc<Recorder>>) -> AppResult<RecordingStarted> {
+pub async fn recording_start(app: AppHandle) -> AppResult<RecordingStarted> {
     let id = crate::db::new_id();
     let path = recordings_dir(&app)?.join(format!("{id}.wav"));
-    recorder.start(app.clone(), &path)?;
+    let recorder = Arc::clone(&*app.state::<Arc<Recorder>>());
+    let app2 = app.clone();
+    let path2 = path.clone();
+    tauri::async_runtime::spawn_blocking(move || recorder.start(app2, &path2))
+        .await
+        .map_err(|e| AppError::Other(e.to_string()))??;
     Ok(RecordingStarted {
         id,
         path: path.to_string_lossy().into_owned(),
@@ -204,13 +222,12 @@ pub fn recording_start(app: AppHandle, recorder: State<'_, Arc<Recorder>>) -> Ap
 }
 
 #[tauri::command]
-pub fn recording_stop(
-    recorder: State<'_, Arc<Recorder>>,
-    db: State<'_, Db>,
-    note_id: Option<String>,
-    lang: Option<String>,
-) -> AppResult<Recording> {
-    let res = recorder.stop()?;
+pub async fn recording_stop(app: AppHandle, note_id: Option<String>, lang: Option<String>) -> AppResult<Recording> {
+    let recorder = Arc::clone(&*app.state::<Arc<Recorder>>());
+    let res = tauri::async_runtime::spawn_blocking(move || recorder.stop())
+        .await
+        .map_err(|e| AppError::Other(e.to_string()))??;
+    let db = app.state::<Db>();
     db.with(|c| {
         recordings::insert_recording(
             c,
@@ -224,8 +241,11 @@ pub fn recording_stop(
 }
 
 #[tauri::command]
-pub fn recording_cancel(recorder: State<'_, Arc<Recorder>>) -> AppResult<()> {
-    recorder.cancel()
+pub async fn recording_cancel(app: AppHandle) -> AppResult<()> {
+    let recorder = Arc::clone(&*app.state::<Arc<Recorder>>());
+    tauri::async_runtime::spawn_blocking(move || recorder.cancel())
+        .await
+        .map_err(|e| AppError::Other(e.to_string()))?
 }
 
 #[tauri::command]
@@ -233,16 +253,42 @@ pub fn recording_is_active(recorder: State<'_, Arc<Recorder>>) -> bool {
     recorder.is_recording()
 }
 
-/// Decode an audio file the user picked and register it as a recording.
+/// Decode an audio (or video — its audio track) file the user picked and register it as a recording.
+/// `temp_id` lets the UI match its placeholder; progress is reported as a `decode` job.
 #[tauri::command]
-pub async fn recording_import(app: AppHandle, path: String, note_id: Option<String>, lang: Option<String>) -> AppResult<Recording> {
+pub async fn recording_import(
+    app: AppHandle,
+    path: String,
+    note_id: Option<String>,
+    lang: Option<String>,
+    temp_id: Option<String>,
+) -> AppResult<Recording> {
     let id = crate::db::new_id();
     let dest = recordings_dir(&app)?.join(format!("{id}.wav"));
     let src = std::path::PathBuf::from(&path);
     let dest2 = dest.clone();
-    let duration = tauri::async_runtime::spawn_blocking(move || crate::audio::decode::decode_to_wav(&src, &dest2))
+    let tmp = temp_id.unwrap_or_else(|| id.clone());
+    let ev = |status: &str, error: Option<String>| pipeline::JobEvent {
+        id: tmp.clone(),
+        recording_id: tmp.clone(),
+        note_id: note_id.clone(),
+        stage: "decode".into(),
+        status: status.into(),
+        progress: 0.0,
+        error,
+    };
+    pipeline::emit_job(&app, ev("running", None));
+    let decoded = tauri::async_runtime::spawn_blocking(move || crate::audio::decode::decode_to_wav(&src, &dest2))
         .await
-        .map_err(|e| AppError::Other(e.to_string()))??;
+        .map_err(|e| AppError::Other(e.to_string()));
+    let duration = match decoded.and_then(|r| r) {
+        Ok(d) => d,
+        Err(e) => {
+            pipeline::emit_job(&app, ev("failed", Some(e.to_string())));
+            return Err(e);
+        }
+    };
+    pipeline::emit_job(&app, ev("done", None));
     let db = app.state::<Db>();
     db.with(|c| {
         recordings::insert_recording(c, note_id.as_deref(), &dest.to_string_lossy(), duration, lang.as_deref(), "upload")
@@ -264,6 +310,12 @@ pub fn transcript_get(db: State<'_, Db>, recording_id: String) -> AppResult<Opti
     db.with(|c| recordings::transcript_for_recording(c, &recording_id))
 }
 
+/// Cancel a queued/running transcription or AI job. Returns false if unknown.
+#[tauri::command]
+pub fn job_cancel(jobs: State<'_, Arc<pipeline::Jobs>>, job_id: String) -> bool {
+    jobs.cancel(&job_id)
+}
+
 // ── AI ─────────────────────────────────────────────────────────────────────
 
 use crate::llm::prompts::Task;
@@ -271,11 +323,18 @@ use crate::llm::{LlmServer, LlmStatus};
 use crate::pipeline_ai;
 
 #[tauri::command]
-pub fn ai_note(app: AppHandle, note_id: String, recording_id: String) -> AppResult<String> {
-    pipeline_ai::start_note_from_recording(app, note_id, recording_id)
+pub fn ai_note(
+    app: AppHandle,
+    note_id: String,
+    recording_id: String,
+    target_lang: Option<String>,
+    instruction: Option<String>,
+) -> AppResult<String> {
+    pipeline_ai::start_note_from_recording(app, note_id, recording_id, target_lang, instruction)
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub fn ai_task(
     app: AppHandle,
     note_id: Option<String>,
@@ -283,8 +342,19 @@ pub fn ai_task(
     text: String,
     lang: Option<String>,
     target_lang: Option<String>,
+    instruction: Option<String>,
+    question: Option<String>,
 ) -> AppResult<String> {
-    pipeline_ai::start_task(app, note_id, task, text, lang.unwrap_or_else(|| "auto".into()), target_lang)
+    pipeline_ai::start_task(
+        app,
+        note_id,
+        task,
+        text,
+        lang.unwrap_or_else(|| "auto".into()),
+        target_lang,
+        instruction,
+        question,
+    )
 }
 
 #[tauri::command]
@@ -295,4 +365,53 @@ pub fn llm_status(llm: State<'_, Arc<LlmServer>>) -> LlmStatus {
 #[tauri::command]
 pub fn llm_stop(llm: State<'_, Arc<LlmServer>>) {
     llm.stop()
+}
+
+// ── file picking without NSOpenPanel in-process ─────────────────────────────
+// rfd/objc2 abort the whole app when AppKit's panel service hiccups
+// (`+[NSOpenPanel openPanel]` returned NULL). Hosting the panel in `osascript`
+// turns that into an error we can show instead.
+
+#[tauri::command]
+pub async fn pick_media_files(prompt: String) -> AppResult<Vec<String>> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let prompt = prompt.replace('"', "'");
+        let script = format!(
+            "set fs to choose file with prompt \"{prompt}\" with multiple selections allowed\n\
+             set out to \"\"\n\
+             repeat with f in fs\n\
+                 set out to out & POSIX path of f & linefeed\n\
+             end repeat\n\
+             return out"
+        );
+        let out = std::process::Command::new("osascript").arg("-e").arg(script).output()?;
+        if !out.status.success() {
+            let err = String::from_utf8_lossy(&out.stderr);
+            if err.contains("-128") {
+                return Ok(Vec::new()); // user cancelled
+            }
+            return Err(AppError::Other(format!("file dialog failed: {}", err.trim())));
+        }
+        Ok(String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .map(|l| l.trim().to_string())
+            .filter(|l| !l.is_empty())
+            .collect())
+    })
+    .await
+    .map_err(|e| AppError::Other(e.to_string()))?
+}
+
+/// Copy a dropped image into the attachments folder; returns the stored path.
+#[tauri::command]
+pub fn attachment_import(app: AppHandle, path: String) -> AppResult<String> {
+    let src = std::path::PathBuf::from(&path);
+    let ext = src
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_lowercase())
+        .unwrap_or_else(|| "bin".into());
+    let dest = crate::attachments::attachments_dir(&app)?.join(format!("{}.{ext}", crate::db::new_id()));
+    std::fs::copy(&src, &dest)?;
+    Ok(dest.to_string_lossy().into_owned())
 }

@@ -41,17 +41,10 @@ export const tauriApi: Api = {
   recordingStart: () => invoke("recording_start"),
   recordingStop: (noteId, lang) => invoke("recording_stop", { noteId, lang }),
   recordingCancel: () => invoke("recording_cancel"),
-  async pickAudioFiles() {
-    const { open } = await import("@tauri-apps/plugin-dialog");
-    const picked = await open({
-      multiple: true,
-      directory: false,
-      filters: [{ name: "Audio", extensions: ["m4a", "mp3", "wav", "flac", "aac", "ogg", "mp4", "caf", "aiff", "aif"] }],
-    });
-    if (!picked) return [];
-    return Array.isArray(picked) ? picked : [picked];
-  },
-  recordingImport: (path, noteId, lang) => invoke("recording_import", { path, noteId, lang }),
+  pickAudioFiles: (prompt) => invoke("pick_media_files", { prompt }),
+  attachmentImport: (path) => invoke<string>("attachment_import", { path }).then(convertFileSrc),
+  recordingImport: (path, noteId, lang, tempId) => invoke("recording_import", { path, noteId, lang, tempId: tempId ?? null }),
+  jobCancel: (jobId) => invoke("job_cancel", { jobId }),
   recordingsList: (noteId) => invoke("recordings_list", { noteId }),
   transcribeStart: (recordingId, lang) => invoke("transcribe_start", { recordingId, lang }),
   transcriptGet: (recordingId) => invoke("transcript_get", { recordingId }),
@@ -60,8 +53,18 @@ export const tauriApi: Api = {
   onJobUpdate: (cb) => listen<JobEvent>("job:update", (e) => cb(e.payload)),
   onTranscriptReady: (cb) => listen<TranscriptEvent>("transcript:ready", (e) => cb(e.payload)),
 
-  aiNote: (noteId, recordingId) => invoke("ai_note", { noteId, recordingId }),
-  aiTask: (noteId, task, text, lang, targetLang) => invoke("ai_task", { noteId, task, text, lang, targetLang: targetLang ?? null }),
+  aiNote: (noteId, recordingId, o = {}) =>
+    invoke("ai_note", { noteId, recordingId, targetLang: o.targetLang ?? null, instruction: o.instruction?.trim() || null }),
+  aiTask: (noteId, task, text, lang, o = {}) =>
+    invoke("ai_task", {
+      noteId,
+      task,
+      text,
+      lang,
+      targetLang: o.targetLang ?? null,
+      instruction: o.instruction?.trim() || null,
+      question: o.question?.trim() || null,
+    }),
   llmStatus: () => invoke("llm_status"),
   onAiReady: (cb) => listen<AiEvent>("ai:ready", (e) => cb(e.payload)),
 };

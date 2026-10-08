@@ -51,9 +51,31 @@ impl LlmServer {
     }
 
     pub fn stop(&self) {
-        let mut g = self.running.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(mut r) = g.take() {
-            let _ = r.child.start_kill();
+        let child = {
+            let mut g = self.running.lock().unwrap_or_else(|e| e.into_inner());
+            g.take().map(|r| r.child)
+        };
+        if let Some(mut child) = child {
+            let _ = child.start_kill();
+            // Wait briefly so the model file is actually released (delete/replace relies on it).
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while Instant::now() < deadline {
+                if matches!(child.try_wait(), Ok(Some(_))) {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+        }
+    }
+
+    /// Stop only if the server currently serves `model`.
+    pub fn stop_if_model(&self, model: &Path) {
+        let serving = {
+            let g = self.running.lock().unwrap_or_else(|e| e.into_inner());
+            g.as_ref().map(|r| r.model == model).unwrap_or(false)
+        };
+        if serving {
+            self.stop();
         }
     }
 
@@ -152,6 +174,28 @@ impl LlmServer {
     }
 }
 
+/// Kill `llama-server` processes left over from earlier app runs (a crashed or
+/// force-quit app cannot run its cleanup, and the orphan keeps the model file —
+/// and several GB of RAM — alive).
+pub fn kill_orphans(runtime_dir: &Path) -> usize {
+    use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System};
+    let mut sys = System::new();
+    sys.refresh_processes_specifics(ProcessesToUpdate::All, true, ProcessRefreshKind::nothing().with_exe(sysinfo::UpdateKind::Always));
+    let me = sysinfo::get_current_pid().ok();
+    let mut n = 0;
+    for (pid, proc_) in sys.processes() {
+        let ours = proc_.exe().map(|e| e.starts_with(runtime_dir)).unwrap_or(false);
+        let is_server = proc_.name().to_string_lossy().contains("llama-server");
+        if ours && is_server && proc_.parent() != me {
+            if proc_.kill() {
+                n += 1;
+                eprintln!("killed orphan llama-server pid {pid}");
+            }
+        }
+    }
+    n
+}
+
 async fn health(port: u16) -> bool {
     let client = reqwest::Client::builder().timeout(Duration::from_secs(2)).build();
     let Ok(client) = client else { return false };
@@ -226,7 +270,7 @@ mod tests {
         let transcript = "Hello, this is a short test recording for the transcription pipeline. The meeting is on Friday at 3 o'clock. \
             Malika will finish the design by Thursday. Jasur handles the whisper integration next week. We decided to ship the first demo in October. \
             Last month we had 4 recordings, this month 7, and we expect 12 next month.";
-        let prompt = prompts::build(prompts::Task::Note, transcript, "en", None);
+        let prompt = prompts::build(prompts::Task::Note, transcript, "en", None, &prompts::Extra::default());
         let t1 = Instant::now();
         let out = complete_json(port, &prompt.system, &prompt.user, &prompt.schema, prompt.max_tokens).await.expect("completion");
         println!("completion in {:?}", t1.elapsed());

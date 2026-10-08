@@ -1,9 +1,13 @@
-//! Background jobs: recording → transcript (M4), transcript → AI note (M5).
+//! Background jobs: recording → transcript. One transcription at a time (the GPU
+//! is shared), everything else waits in `queued`. Jobs can be cancelled.
 
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
+use tokio::sync::Semaphore;
 
 use crate::db::recordings::{self, Transcript};
 use crate::db::Db;
@@ -35,8 +39,68 @@ pub struct TranscriptEvent {
     pub transcript: Transcript,
 }
 
-fn emit_job(app: &AppHandle, ev: JobEvent) {
+/// Shared job registry: concurrency limits + cancellation flags.
+pub struct Jobs {
+    pub stt: Arc<Semaphore>,
+    pub llm: Arc<Semaphore>,
+    cancels: Mutex<HashMap<String, Arc<AtomicBool>>>,
+}
+
+impl Default for Jobs {
+    fn default() -> Self {
+        Self {
+            stt: Arc::new(Semaphore::new(1)),
+            llm: Arc::new(Semaphore::new(1)),
+            cancels: Mutex::new(HashMap::new()),
+        }
+    }
+}
+
+impl Jobs {
+    pub fn register(&self, job_id: &str) -> Arc<AtomicBool> {
+        let flag = Arc::new(AtomicBool::new(false));
+        self.cancels
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(job_id.to_string(), Arc::clone(&flag));
+        flag
+    }
+    pub fn finish(&self, job_id: &str) {
+        self.cancels.lock().unwrap_or_else(|e| e.into_inner()).remove(job_id);
+    }
+    pub fn cancel(&self, job_id: &str) -> bool {
+        match self.cancels.lock().unwrap_or_else(|e| e.into_inner()).get(job_id) {
+            Some(f) => {
+                f.store(true, Ordering::Relaxed);
+                true
+            }
+            None => false,
+        }
+    }
+}
+
+pub fn emit_job(app: &AppHandle, ev: JobEvent) {
     let _ = app.emit(JOB_EVENT, ev);
+}
+
+struct Ctx {
+    job_id: String,
+    recording_id: String,
+    note_id: Option<String>,
+}
+
+impl Ctx {
+    fn ev(&self, status: &str, progress: f64, error: Option<String>) -> JobEvent {
+        JobEvent {
+            id: self.job_id.clone(),
+            recording_id: self.recording_id.clone(),
+            note_id: self.note_id.clone(),
+            stage: "transcribe".into(),
+            status: status.into(),
+            progress,
+            error,
+        }
+    }
 }
 
 /// Queue a transcription for `recording_id`. Returns the job id immediately.
@@ -46,151 +110,96 @@ pub fn start_transcription(app: AppHandle, recording_id: String, lang: String) -
     let job = db.with(|c| recordings::insert_job(c, &recording_id, "transcribe"))?;
     db.with(|c| recordings::set_recording_lang(c, &recording_id, Some(&lang)))?;
 
-    let models = Arc::clone(&*app.state::<Arc<ModelManager>>());
-    let model_path = models
-        .ready_path(ModelKind::Stt)
-        .ok_or_else(|| AppError::Other("no speech model downloaded".into()));
-
-    let job_id = job.id.clone();
-    let note_id = recording.note_id.clone();
-    emit_job(
-        &app,
-        JobEvent {
-            id: job_id.clone(),
-            recording_id: recording_id.clone(),
-            note_id: note_id.clone(),
-            stage: "transcribe".into(),
-            status: "queued".into(),
-            progress: 0.0,
-            error: None,
-        },
-    );
-
-    let model_path = match model_path {
-        Ok(p) => p,
-        Err(e) => {
-            db.with(|c| recordings::update_job(c, &job_id, "failed", 0.0, Some(&e.to_string())))?;
-            emit_job(
-                &app,
-                JobEvent {
-                    id: job_id.clone(),
-                    recording_id,
-                    note_id,
-                    stage: "transcribe".into(),
-                    status: "failed".into(),
-                    progress: 0.0,
-                    error: Some(e.to_string()),
-                },
-            );
-            return Err(e);
-        }
+    let ctx = Ctx {
+        job_id: job.id.clone(),
+        recording_id: recording_id.clone(),
+        note_id: recording.note_id.clone(),
     };
+    let jobs = Arc::clone(&*app.state::<Arc<Jobs>>());
+    let cancel = jobs.register(&ctx.job_id);
+    emit_job(&app, ctx.ev("queued", 0.0, None));
 
-    let app2 = app.clone();
-    let job_id2 = job_id.clone();
+    let job_id = ctx.job_id.clone();
     tauri::async_runtime::spawn(async move {
-        let app = app2;
+        let result = run(&app, &ctx, &jobs, cancel, recording.path.clone(), lang).await;
+        jobs.finish(&ctx.job_id);
         let db = app.state::<Db>();
-        let _ = db.with(|c| recordings::update_job(c, &job_id2, "running", 0.0, None));
-        emit_job(
-            &app,
-            JobEvent {
-                id: job_id2.clone(),
-                recording_id: recording_id.clone(),
-                note_id: note_id.clone(),
-                stage: "transcribe".into(),
-                status: "running".into(),
-                progress: 0.0,
-                error: None,
-            },
-        );
-
-        let stt = Arc::clone(&*app.state::<Arc<Stt>>());
-        let wav = std::path::PathBuf::from(&recording.path);
-        let progress_app = app.clone();
-        let (pj, pr, pn) = (job_id2.clone(), recording_id.clone(), note_id.clone());
-        let model_name = model_path.file_name().map(|f| f.to_string_lossy().into_owned());
-        let lang_for_task = lang.clone();
-
-        let result = tauri::async_runtime::spawn_blocking(move || {
-            stt.transcribe(&model_path, &wav, &lang_for_task, move |p| {
-                emit_job(
-                    &progress_app,
-                    JobEvent {
-                        id: pj.clone(),
-                        recording_id: pr.clone(),
-                        note_id: pn.clone(),
-                        stage: "transcribe".into(),
-                        status: "running".into(),
-                        progress: (p as f64 / 100.0).clamp(0.0, 1.0),
-                        error: None,
+        match result {
+            Ok(transcript) => {
+                let _ = db.with(|c| recordings::update_job(c, &ctx.job_id, "done", 1.0, None));
+                emit_job(&app, ctx.ev("done", 1.0, None));
+                let _ = app.emit(
+                    TRANSCRIPT_EVENT,
+                    TranscriptEvent {
+                        recording_id: ctx.recording_id.clone(),
+                        note_id: ctx.note_id.clone(),
+                        transcript,
                     },
                 );
-            })
-        })
-        .await
-        .map_err(|e| AppError::Other(e.to_string()))
-        .and_then(|r| r);
-
-        match result {
-            Ok(res) => {
-                let saved = db.with(|c| {
-                    recordings::insert_transcript(
-                        c,
-                        &recording_id,
-                        res.lang_detected.as_deref(),
-                        &res.segments,
-                        &res.text,
-                        model_name.as_deref(),
-                    )
-                });
-                match saved {
-                    Ok(transcript) => {
-                        let _ = db.with(|c| recordings::update_job(c, &job_id2, "done", 1.0, None));
-                        emit_job(
-                            &app,
-                            JobEvent {
-                                id: job_id2.clone(),
-                                recording_id: recording_id.clone(),
-                                note_id: note_id.clone(),
-                                stage: "transcribe".into(),
-                                status: "done".into(),
-                                progress: 1.0,
-                                error: None,
-                            },
-                        );
-                        let _ = app.emit(
-                            TRANSCRIPT_EVENT,
-                            TranscriptEvent {
-                                recording_id,
-                                note_id,
-                                transcript,
-                            },
-                        );
-                    }
-                    Err(e) => fail(&app, &job_id2, &recording_id, note_id, e),
-                }
             }
-            Err(e) => fail(&app, &job_id2, &recording_id, note_id, e),
+            Err(AppError::Cancelled) => {
+                let _ = db.with(|c| recordings::update_job(c, &ctx.job_id, "cancelled", 0.0, None));
+                emit_job(&app, ctx.ev("cancelled", 0.0, None));
+            }
+            Err(e) => {
+                let _ = db.with(|c| recordings::update_job(c, &ctx.job_id, "failed", 0.0, Some(&e.to_string())));
+                emit_job(&app, ctx.ev("failed", 0.0, Some(e.to_string())));
+            }
         }
     });
 
     Ok(job_id)
 }
 
-fn fail(app: &AppHandle, job_id: &str, recording_id: &str, note_id: Option<String>, e: AppError) {
+async fn run(
+    app: &AppHandle,
+    ctx: &Ctx,
+    jobs: &Jobs,
+    cancel: Arc<AtomicBool>,
+    wav_path: String,
+    lang: String,
+) -> AppResult<Transcript> {
+    // Wait for the GPU slot. Cancelling while queued just skips the work.
+    let _permit = jobs.stt.acquire().await.map_err(|_| AppError::Other("job queue closed".into()))?;
+    if cancel.load(Ordering::Relaxed) {
+        return Err(AppError::Cancelled);
+    }
+
+    let models = Arc::clone(&*app.state::<Arc<ModelManager>>());
+    let model_path = models
+        .ready_path(ModelKind::Stt)
+        .ok_or_else(|| AppError::Other("no speech model downloaded".into()))?;
+    let model_name = model_path.file_name().map(|f| f.to_string_lossy().into_owned());
+
     let db = app.state::<Db>();
-    let _ = db.with(|c| recordings::update_job(c, job_id, "failed", 0.0, Some(&e.to_string())));
-    emit_job(
-        app,
-        JobEvent {
-            id: job_id.to_string(),
-            recording_id: recording_id.to_string(),
-            note_id,
-            stage: "transcribe".into(),
-            status: "failed".into(),
-            progress: 0.0,
-            error: Some(e.to_string()),
-        },
-    );
+    let _ = db.with(|c| recordings::update_job(c, &ctx.job_id, "running", 0.0, None));
+    emit_job(app, ctx.ev("running", 0.0, None));
+
+    let stt = Arc::clone(&*app.state::<Arc<Stt>>());
+    let wav = std::path::PathBuf::from(&wav_path);
+    let progress_app = app.clone();
+    let pctx = Ctx {
+        job_id: ctx.job_id.clone(),
+        recording_id: ctx.recording_id.clone(),
+        note_id: ctx.note_id.clone(),
+    };
+    let lang_for_task = lang.clone();
+    let res = tauri::async_runtime::spawn_blocking(move || {
+        stt.transcribe(&model_path, &wav, &lang_for_task, cancel, move |p| {
+            emit_job(&progress_app, pctx.ev("running", (p as f64 / 100.0).clamp(0.0, 1.0), None));
+        })
+    })
+    .await
+    .map_err(|e| AppError::Other(e.to_string()))??;
+
+    db.with(|c| {
+        recordings::insert_transcript(
+            c,
+            &ctx.recording_id,
+            res.lang_detected.as_deref(),
+            &res.segments,
+            &res.text,
+            model_name.as_deref(),
+        )
+    })
 }

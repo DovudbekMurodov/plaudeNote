@@ -105,6 +105,7 @@ export interface SystemInfo {
   arch: string;
   os: string;
   cpu: string;
+  diskFreeBytes: number | null;
 }
 
 export interface ModelsApi {
@@ -149,8 +150,8 @@ export interface JobEvent {
   id: string;
   recordingId: string;
   noteId: string | null;
-  stage: "transcribe" | "summarize";
-  status: "queued" | "running" | "done" | "failed";
+  stage: "decode" | "transcribe" | "summarize";
+  status: "queued" | "running" | "done" | "failed" | "cancelled";
   progress: number;
   error: string | null;
 }
@@ -171,9 +172,14 @@ export interface RecorderApi {
   recordingStart(): Promise<{ id: string; path: string }>;
   recordingStop(noteId: string | null, lang: string): Promise<Recording>;
   recordingCancel(): Promise<void>;
-  /** Native file picker for audio; returns absolute paths (empty if cancelled). */
-  pickAudioFiles(): Promise<string[]>;
-  recordingImport(path: string, noteId: string | null, lang: string): Promise<Recording>;
+  /** Native file picker for audio/video; returns absolute paths (empty if cancelled). */
+  pickAudioFiles(prompt: string): Promise<string[]>;
+  /** Copy a dropped image into the attachments folder; returns a URL the webview can load. */
+  attachmentImport(path: string): Promise<string>;
+  /** `tempId` is echoed back in `decode` job events so the UI can match its placeholder. */
+  recordingImport(path: string, noteId: string | null, lang: string, tempId?: string): Promise<Recording>;
+  /** Cancel a queued/running transcription or AI job. */
+  jobCancel(jobId: string): Promise<boolean>;
   recordingsList(noteId: string): Promise<Recording[]>;
   transcribeStart(recordingId: string, lang: string): Promise<string>;
   transcriptGet(recordingId: string): Promise<Transcript | null>;
@@ -184,7 +190,15 @@ export interface RecorderApi {
   onTranscriptReady(cb: (e: TranscriptEvent) => void): Promise<() => void>;
 }
 
-export type AiTask = "note" | "mindmap" | "todos" | "summary" | "translate";
+export type AiTask = "note" | "mindmap" | "todos" | "summary" | "translate" | "ask";
+
+export interface AiOptions {
+  targetLang?: string;
+  /** Extra guidance appended to the system prompt. */
+  instruction?: string;
+  /** For the `ask` task. */
+  question?: string;
+}
 
 export interface MindNode {
   name: string;
@@ -221,6 +235,8 @@ export interface AiEvent {
   task: AiTask;
   lang: string;
   result: unknown;
+  /** Echoed for `ask`. */
+  question?: string | null;
 }
 
 export interface LlmStatus {
@@ -231,8 +247,8 @@ export interface LlmStatus {
 
 export interface AiApi {
   /** Structured note from a recording's transcript. Returns job id; result via onAiReady. */
-  aiNote(noteId: string, recordingId: string): Promise<string>;
-  aiTask(noteId: string | null, task: AiTask, text: string, lang: string, targetLang?: string): Promise<string>;
+  aiNote(noteId: string, recordingId: string, opts?: AiOptions): Promise<string>;
+  aiTask(noteId: string | null, task: AiTask, text: string, lang: string, opts?: AiOptions): Promise<string>;
   llmStatus(): Promise<LlmStatus>;
   onAiReady(cb: (e: AiEvent) => void): Promise<() => void>;
 }

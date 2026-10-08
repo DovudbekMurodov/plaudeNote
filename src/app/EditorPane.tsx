@@ -13,6 +13,7 @@ import { useEditorStore } from "@/features/editor/editorStore";
 import { pickImage } from "@/features/editor/attachments";
 import { copyMarkdown, exportMarkdown, printNote } from "@/features/editor/exportNote";
 import { AiMenu } from "@/features/ai/AiMenu";
+import { AiBar } from "@/features/ai/AiBar";
 
 function Toolbar({ enabled }: { enabled: boolean }) {
   const { t } = useTranslation();
@@ -119,6 +120,7 @@ export function EditorPane() {
         </div>
       </div>
 
+      {note && !inTrash && <AiBar />}
       {note ? (
         <div key={note.id} className="fade-in editor-scroll flex-1 overflow-y-auto">
           {inTrash && (

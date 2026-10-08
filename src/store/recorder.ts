@@ -1,13 +1,15 @@
 import { create } from "zustand";
 import { api, type JobEvent, type Recording } from "@/api";
 import { useUI } from "./ui";
+import i18n from "@/i18n";
 import { useNotes } from "./notes";
-import { appendToNote, replaceInNote } from "@/features/notes/appendToNote";
+import { appendToNote, replaceInNote, updateNodeAttrs } from "@/features/notes/appendToNote";
 import { useAi } from "./ai";
 
 export type RecorderStatus = "idle" | "starting" | "recording" | "stopping";
 
 interface JobState {
+  jobId: string;
   status: JobEvent["status"];
   progress: number;
   error: string | null;
@@ -28,15 +30,23 @@ interface RecorderState {
   stop(): Promise<void>;
   cancel(): Promise<void>;
   importFiles(): Promise<void>;
+  /** Import already-known paths (drag & drop). */
+  importPaths(paths: string[]): Promise<void>;
   dismissError(): void;
 }
 
 function audioNode(rec: Recording, title: string) {
   return { type: "audio", attrs: { path: rec.path, title, recordingId: rec.id, durationMs: rec.durationMs } };
 }
-function pendingTranscriptNode(rec: Recording, lang: string) {
-  return { type: "transcript", attrs: { recordingId: rec.id, lang: lang === "auto" ? null : lang, segments: [], pending: true, progress: 0, error: null } };
+function pendingTranscriptNode(recordingId: string, lang: string, stage: "decode" | "queued" | "running") {
+  return {
+    type: "transcript",
+    attrs: { recordingId, lang: lang === "auto" ? null : lang, segments: [], pending: true, stage, progress: 0, error: null, jobId: null },
+  };
 }
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
+const isPendingFor = (recordingId: string) => (n: { type?: string; attrs?: Record<string, unknown> }) =>
+  n.type === "transcript" && n.attrs?.recordingId === recordingId && !!n.attrs?.pending;
 
 async function ensureNote(): Promise<string> {
   const ui = useUI.getState();
@@ -73,20 +83,37 @@ export const useRecorder = create<RecorderState>()((set, get) => ({
     add(api.onRecordLevel((e) => set({ level: e.rms, elapsedMs: e.elapsedMs })));
     add(
       api.onJobUpdate((e) => {
-        const key = e.stage === "summarize" ? `ai:${e.id}` : e.recordingId;
+        if (e.stage === "summarize") {
+          useAi.getState().onJob(e);
+          set((s) => {
+            const jobs = { ...s.jobs };
+            const key = `ai:${e.id}`;
+            if (e.status === "queued" || e.status === "running") jobs[key] = { jobId: e.id, status: e.status, progress: e.progress, error: e.error, noteId: e.noteId, stage: e.stage };
+            else delete jobs[key];
+            return { jobs };
+          });
+          return;
+        }
+        // decode + transcribe are keyed by recording id (decode uses the placeholder's temp id)
         set((s) => {
           const jobs = { ...s.jobs };
-          if (e.status === "done" || (e.status === "failed" && e.stage === "summarize")) delete jobs[key];
-          else jobs[key] = { status: e.status, progress: e.progress, error: e.error, noteId: e.noteId, stage: e.stage };
+          if (e.status === "queued" || e.status === "running") jobs[e.recordingId] = { jobId: e.id, status: e.status, progress: e.progress, error: e.error, noteId: e.noteId, stage: e.stage };
+          else delete jobs[e.recordingId];
           return { jobs };
         });
-        if (e.stage === "transcribe" && e.noteId && (e.status === "running" || e.status === "failed")) {
-          // Keep the placeholder block in the note in sync.
-          void replaceInNote(e.noteId, (n) => n.type === "transcript" && n.attrs?.recordingId === e.recordingId && n.attrs?.pending, [
-            { type: "transcript", attrs: { recordingId: e.recordingId, lang: null, segments: [], pending: e.status !== "failed", progress: e.progress, error: e.error } },
-          ]).catch(console.error);
+        if (!e.noteId) return;
+        if (e.stage === "decode") {
+          if (e.status === "failed") void updateNodeAttrs(e.noteId, isPendingFor(e.recordingId), { pending: false, error: e.error ?? "decode failed", jobId: null });
+          return;
         }
-        if (e.status === "failed") set({ error: e.error ?? "transcription failed" });
+        if (e.status === "queued" || e.status === "running") {
+          void updateNodeAttrs(e.noteId, isPendingFor(e.recordingId), { stage: e.status, progress: e.progress, jobId: e.id });
+        } else if (e.status === "failed") {
+          void updateNodeAttrs(e.noteId, isPendingFor(e.recordingId), { pending: false, error: e.error ?? "failed", jobId: null });
+          set({ error: e.error ?? "transcription failed" });
+        } else if (e.status === "cancelled") {
+          void updateNodeAttrs(e.noteId, isPendingFor(e.recordingId), { pending: false, error: "cancelled", jobId: null });
+        }
       }),
     );
     add(
@@ -137,9 +164,9 @@ export const useRecorder = create<RecorderState>()((set, get) => ({
       const rec = await api.recordingStop(noteId, lang);
       set({ status: "idle", elapsedMs: 0, level: 0 });
       if (rec.durationMs < 500) return;
-      await appendToNote(noteId, [audioNode(rec, recordingTitle(rec, lang)), pendingTranscriptNode(rec, lang)]);
-      set((s) => ({ jobs: { ...s.jobs, [rec.id]: { status: "queued", progress: 0, error: null, noteId, stage: "transcribe" } } }));
-      await api.transcribeStart(rec.id, lang);
+      await appendToNote(noteId, [audioNode(rec, recordingTitle(rec, lang)), pendingTranscriptNode(rec.id, lang, "queued")]);
+      const jobId = await api.transcribeStart(rec.id, lang);
+      await updateNodeAttrs(noteId, isPendingFor(rec.id), { jobId });
     } catch (e) {
       set({ status: "idle", error: String(e) });
     }
@@ -154,26 +181,52 @@ export const useRecorder = create<RecorderState>()((set, get) => ({
   },
 
   async importFiles() {
-    const lang = useUI.getState().speechLang;
     let paths: string[] = [];
     try {
-      paths = await api.pickAudioFiles();
+      paths = await api.pickAudioFiles(i18n.t("record.pickPrompt"));
     } catch (e) {
       set({ error: String(e) });
       return;
     }
+    await get().importPaths(paths);
+  },
+
+  async importPaths(paths) {
+    const lang = useUI.getState().speechLang;
     if (!paths.length) return;
+    let noteId: string;
     try {
-      const noteId = await ensureNote();
-      for (const path of paths) {
-        const rec = await api.recordingImport(path, noteId, lang);
-        const name = path.split("/").pop() ?? "audio";
-        await appendToNote(noteId, [audioNode(rec, `📁 ${name}`), pendingTranscriptNode(rec, lang)]);
-        set((s) => ({ jobs: { ...s.jobs, [rec.id]: { status: "queued", progress: 0, error: null, noteId, stage: "transcribe" } } }));
-        await api.transcribeStart(rec.id, lang);
-      }
+      noteId = await ensureNote();
     } catch (e) {
       set({ error: String(e) });
+      return;
+    }
+    for (const path of paths) {
+      const name = path.split("/").pop() ?? "audio";
+      const tempId = uid();
+      // Placeholder goes in immediately — decoding a long file takes a moment.
+      await appendToNote(noteId, [pendingTranscriptNode(tempId, lang, "decode")]);
+      set((s) => ({ jobs: { ...s.jobs, [tempId]: { jobId: tempId, status: "running", progress: 0, error: null, noteId, stage: "decode" } } }));
+      let rec: Recording;
+      try {
+        rec = await api.recordingImport(path, noteId, lang, tempId);
+      } catch (e) {
+        await updateNodeAttrs(noteId, isPendingFor(tempId), { pending: false, error: String(e), jobId: null });
+        set((s) => {
+          const jobs = { ...s.jobs };
+          delete jobs[tempId];
+          return { jobs, error: String(e) };
+        });
+        continue;
+      }
+      await replaceInNote(noteId, isPendingFor(tempId), [audioNode(rec, `📁 ${name}`), pendingTranscriptNode(rec.id, lang, "queued")]);
+      try {
+        const jobId = await api.transcribeStart(rec.id, lang);
+        await updateNodeAttrs(noteId, isPendingFor(rec.id), { jobId });
+      } catch (e) {
+        await updateNodeAttrs(noteId, isPendingFor(rec.id), { pending: false, error: String(e), jobId: null });
+        set({ error: String(e) });
+      }
     }
   },
 

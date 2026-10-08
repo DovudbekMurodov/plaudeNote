@@ -241,7 +241,7 @@ export const mockApi: Api = {
     emitProgress(m);
   },
   async systemInfo() {
-    return { ramGb: 16, arch: "aarch64", os: "macos", cpu: "Apple M4 (mock)" };
+    return { ramGb: 16, arch: "aarch64", os: "macos", cpu: "Apple M4 (mock)", diskFreeBytes: 42_000_000_000 };
   },
   async openModelsWindow() {
     window.open("/models.html", "plaudenote-models", "width=640,height=700");
@@ -277,10 +277,25 @@ export const mockApi: Api = {
   async pickAudioFiles() {
     return [`/mock/upload-${Date.now()}.m4a`];
   },
-  async recordingImport(path, noteId, lang) {
+  async attachmentImport(path) {
+    return path;
+  },
+  async recordingImport(path, noteId, lang, tempId) {
+    const base = { id: tempId ?? "", recordingId: tempId ?? "", noteId, stage: "decode" as const, progress: 0, error: null };
+    jobListeners.forEach((cb) => cb({ ...base, status: "running" }));
+    await new Promise((r) => window.setTimeout(r, 1500)); // pretend to decode
+    jobListeners.forEach((cb) => cb({ ...base, status: "done" }));
     const r: Recording = { id: uid(), noteId, path, durationMs: 83_000, lang, source: "upload", createdAt: now() };
     recordings.push(r);
     return r;
+  },
+  async jobCancel(jobId) {
+    const t = mockJobs.get(jobId);
+    if (!t) return false;
+    window.clearTimeout(t.timer);
+    mockJobs.delete(jobId);
+    jobListeners.forEach((cb) => cb({ ...t.base, status: "cancelled", progress: 0 }));
+    return true;
   },
   async recordingsList(noteId) {
     return recordings.filter((r) => r.noteId === noteId);
@@ -289,14 +304,16 @@ export const mockApi: Api = {
     const r = recordings.find((x) => x.id === recordingId);
     const jobId = uid();
     const base = { id: jobId, recordingId, noteId: r?.noteId ?? null, stage: "transcribe" as const, error: null };
+    jobListeners.forEach((cb) => cb({ ...base, status: "queued", progress: 0 }));
     let p = 0;
     const tick = () => {
       p += 0.2;
       if (p < 1) {
         jobListeners.forEach((cb) => cb({ ...base, status: "running", progress: p }));
-        window.setTimeout(tick, 300);
+        mockJobs.set(jobId, { base, timer: window.setTimeout(tick, 600) });
         return;
       }
+      mockJobs.delete(jobId);
       const ar = lang === "ar";
       const segs = ar
         ? [
@@ -314,7 +331,7 @@ export const mockApi: Api = {
       jobListeners.forEach((cb) => cb({ ...base, status: "done", progress: 1 }));
       transcriptListeners.forEach((cb) => cb({ recordingId, noteId: r?.noteId ?? null, transcript: t }));
     };
-    window.setTimeout(tick, 300);
+    mockJobs.set(jobId, { base, timer: window.setTimeout(tick, 900) });
     return jobId;
   },
   async transcriptGet(recordingId) {
@@ -335,32 +352,37 @@ export const mockApi: Api = {
   },
 
   // ── AI (simulated) ───────────────────────────────────────────────────
-  async aiNote(noteId, recordingId) {
+  async aiNote(noteId, recordingId, o = {}) {
+    const targetLang = o.targetLang;
     const jobId = uid();
     const t = transcripts.get(recordingId);
-    const lang = t?.langDetected ?? "uz";
+    const lang = targetLang && targetLang !== "auto" ? targetLang : (t?.langDetected ?? "uz");
     const base = { id: jobId, recordingId, noteId, stage: "summarize" as const, error: null };
     jobListeners.forEach((cb) => cb({ ...base, status: "running", progress: 0.3 }));
-    window.setTimeout(() => {
+    const timer = window.setTimeout(() => {
+      mockJobs.delete(jobId);
       jobListeners.forEach((cb) => cb({ ...base, status: "done", progress: 1 }));
       aiListeners.forEach((cb) => cb({ jobId, noteId, recordingId, task: "note", lang, result: mockNote(lang) }));
-    }, 1500);
+    }, 2500);
+    mockJobs.set(jobId, { base, timer });
     return jobId;
   },
-  async aiTask(noteId, task, text, lang, targetLang) {
+  async aiTask(noteId, task, text, lang, o = {}) {
+    const targetLang = o.targetLang;
     const jobId = uid();
     const base = { id: jobId, recordingId: "", noteId, stage: "summarize" as const, error: null };
     jobListeners.forEach((cb) => cb({ ...base, status: "running", progress: 0.3 }));
     window.setTimeout(() => {
-      const n = mockNote(lang === "auto" ? "uz" : lang);
+      const n = mockNote(targetLang && targetLang !== "auto" ? targetLang : lang === "auto" ? "uz" : lang);
       const result =
         task === "mindmap" ? n.mindmap
         : task === "todos" ? { action_items: n.action_items }
         : task === "summary" ? { text: n.summary }
         : task === "translate" ? { text: `[${targetLang}] ${text.slice(0, 200)}` }
+        : task === "ask" ? { text: `Savol: ${o.question ?? ""}\n\nJavob (mock): matnda ${text.split(/\s+/).length} ta so'z bor. ${o.instruction ? `Ko'rsatma: ${o.instruction}` : ""}` }
         : n;
       jobListeners.forEach((cb) => cb({ ...base, status: "done", progress: 1 }));
-      aiListeners.forEach((cb) => cb({ jobId, noteId, recordingId: null, task, lang, result }));
+      aiListeners.forEach((cb) => cb({ jobId, noteId, recordingId: null, task, lang: targetLang && targetLang !== "auto" && task !== "translate" ? targetLang : lang, result }));
     }, 1200);
     return jobId;
   },
@@ -398,6 +420,7 @@ function mockNote(lang: string): AiNoteResult {
 }
 
 const rec = { id: "", startedAt: 0, timer: 0 as number };
+const mockJobs = new Map<string, { base: Omit<JobEvent, "status" | "progress">; timer: number }>();
 const recordings: Recording[] = [];
 const transcripts = new Map<string, Transcript>();
 const levelListeners = new Set<(e: LevelEvent) => void>();
@@ -411,13 +434,15 @@ function emitProgress(m: ModelInfo) {
   const p: ModelProgress = { id: m.id, status: m.status, downloadedBytes: m.downloadedBytes, totalBytes: m.size, bytesPerSec: m.bytesPerSec, error: m.error };
   listeners.forEach((cb) => cb(p));
 }
+// Browser dev: pretend the recommended stack is already installed so the whole flow is clickable.
+const PRE_INSTALLED = new Set(["whisper-large-v3-turbo-q5", "qwen3.5-4b-q4", "llama-server"]);
 const model = (m: Omit<ModelInfo, "status" | "downloadedBytes" | "bytesPerSec" | "error" | "path">): ModelInfo => ({
   ...m,
-  status: "missing",
-  downloadedBytes: 0,
+  status: PRE_INSTALLED.has(m.id) ? "ready" : "missing",
+  downloadedBytes: PRE_INSTALLED.has(m.id) ? m.size : 0,
   bytesPerSec: 0,
   error: null,
-  path: null,
+  path: PRE_INSTALLED.has(m.id) ? `/mock/models/${m.kind}/${m.file}` : null,
 });
 const MOCK_MODELS: ModelInfo[] = [
   model({ id: "whisper-large-v3-turbo-q5", kind: "stt", name: "Whisper large-v3 turbo", description: "Best quality for Uzbek and Arabic. Q5_0 quantised.", file: "ggml-large-v3-turbo-q5_0.bin", url: "", size: 574_041_195, minRamGb: 8, langs: "uz, ar, en +96", archive: false, defaultFor16gb: true, defaultFor8gb: true }),

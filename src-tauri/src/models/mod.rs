@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use futures_util::StreamExt;
 use serde::Serialize;
@@ -65,6 +65,8 @@ struct Live {
 pub struct ModelManager {
     root: PathBuf,
     live: Mutex<HashMap<String, Live>>,
+    /// Why the last attempt for a model stopped (cleared when a new attempt starts).
+    last_error: Mutex<HashMap<String, String>>,
 }
 
 impl ModelManager {
@@ -75,6 +77,7 @@ impl ModelManager {
         Ok(Self {
             root,
             live: Mutex::new(HashMap::new()),
+            last_error: Mutex::new(HashMap::new()),
         })
     }
 
@@ -132,8 +135,17 @@ impl ModelManager {
                     info.downloaded_bytes = spec.size;
                     info.path = Some(self.target_path(spec).to_string_lossy().into_owned());
                 } else if let Ok(m) = self.part_path(spec).metadata() {
-                    info.status = Status::Paused;
                     info.downloaded_bytes = m.len();
+                    match self.last_error.lock().unwrap_or_else(|e| e.into_inner()).get(spec.id) {
+                        Some(err) => {
+                            info.status = Status::Error;
+                            info.error = Some(err.clone());
+                        }
+                        None => info.status = Status::Paused,
+                    }
+                } else if let Some(err) = self.last_error.lock().unwrap_or_else(|e| e.into_inner()).get(spec.id) {
+                    info.status = Status::Error;
+                    info.error = Some(err.clone());
                 }
                 info
             })
@@ -180,18 +192,21 @@ impl ModelManager {
     }
 
     fn emit(&self, app: &AppHandle, spec: &ModelSpec) {
+        self.emit_with(&|ev| {
+            let _ = app.emit(PROGRESS_EVENT, ev);
+        }, spec);
+    }
+
+    fn emit_with(&self, emit: &(dyn Fn(ProgressEvent) + Sync), spec: &ModelSpec) {
         let Some(l) = self.snapshot(spec.id) else { return };
-        let _ = app.emit(
-            PROGRESS_EVENT,
-            ProgressEvent {
-                id: spec.id.to_string(),
-                status: l.status,
-                downloaded_bytes: l.downloaded,
-                total_bytes: spec.size,
-                bytes_per_sec: l.bps,
-                error: l.error,
-            },
-        );
+        emit(ProgressEvent {
+            id: spec.id.to_string(),
+            status: l.status,
+            downloaded_bytes: l.downloaded,
+            total_bytes: spec.size,
+            bytes_per_sec: l.bps,
+            error: l.error,
+        });
     }
 
     fn emit_final(&self, app: &AppHandle, spec: &ModelSpec, status: Status, downloaded: u64, error: Option<String>) {
@@ -214,6 +229,23 @@ impl ModelManager {
         if self.is_ready(spec) {
             return Ok(());
         }
+        // Don't start what cannot finish: need the remaining bytes plus a safety margin.
+        let have = self.part_path(spec).metadata().map(|m| m.len()).unwrap_or(0);
+        let need = spec.size.saturating_sub(have) + 300 * 1024 * 1024;
+        if let Some(free) = crate::system::free_space(&self.root) {
+            if free < need {
+                let msg = format!(
+                    "not enough disk space: need {:.1} GB, free {:.1} GB",
+                    need as f64 / 1e9,
+                    free as f64 / 1e9
+                );
+                self.last_error
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .insert(id.to_string(), msg.clone());
+                return Err(AppError::Other(msg));
+            }
+        }
         {
             let mut live = self.live.lock().unwrap_or_else(|e| e.into_inner());
             if live.get(id).map(|l| l.status == Status::Downloading || l.status == Status::Extracting).unwrap_or(false) {
@@ -230,27 +262,61 @@ impl ModelManager {
                 },
             );
         }
+        self.last_error.lock().unwrap_or_else(|e| e.into_inner()).remove(id);
         self.emit(&app, spec);
 
         let mgr = Arc::clone(self);
         tauri::async_runtime::spawn(async move {
-            let result = mgr.run_download(&app, spec).await;
-            let downloaded = mgr.snapshot(spec.id).map(|l| l.downloaded).unwrap_or(0);
-            let cancelled = mgr
-                .snapshot(spec.id)
-                .map(|l| l.cancel.load(Ordering::Relaxed))
-                .unwrap_or(false);
+            let emit_app = app.clone();
+            let emit = move |ev: ProgressEvent| {
+                let _ = emit_app.emit(PROGRESS_EVENT, ev);
+            };
+            let result = mgr.run_download_with_retries(spec, &emit).await;
+            let downloaded = mgr.part_path(spec).metadata().map(|m| m.len()).unwrap_or(0);
             mgr.live.lock().unwrap_or_else(|e| e.into_inner()).remove(spec.id);
             match result {
                 Ok(()) => mgr.emit_final(&app, spec, Status::Ready, spec.size, None),
-                Err(_) if cancelled => mgr.emit_final(&app, spec, Status::Paused, downloaded, None),
-                Err(e) => mgr.emit_final(&app, spec, Status::Error, downloaded, Some(e.to_string())),
+                Err(AppError::Cancelled) => mgr.emit_final(&app, spec, Status::Paused, downloaded, None),
+                Err(e) => {
+                    mgr.last_error
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .insert(spec.id.to_string(), e.to_string());
+                    mgr.emit_final(&app, spec, Status::Error, downloaded, Some(e.to_string()));
+                }
             }
         });
         Ok(())
     }
 
-    async fn run_download(&self, app: &AppHandle, spec: &ModelSpec) -> AppResult<()> {
+    /// CDNs drop long connections now and then; resume from the `.part` with backoff.
+    pub async fn run_download_with_retries(&self, spec: &ModelSpec, emit: &(dyn Fn(ProgressEvent) + Sync)) -> AppResult<()> {
+        let mut attempt: u32 = 0;
+        loop {
+            match self.run_download(spec, emit).await {
+                Ok(()) => return Ok(()),
+                Err(AppError::Cancelled) => return Err(AppError::Cancelled),
+                Err(e) if attempt < 8 && is_transient(&e) => {
+                    attempt += 1;
+                    let wait = Duration::from_secs((1u64 << attempt.min(5)).min(30));
+                    eprintln!("download {}: {e}; retry {attempt} in {wait:?}", spec.id);
+                    self.set_live(spec.id, |l| l.bps = 0.0);
+                    // Still cancellable while waiting.
+                    let cancel = self.snapshot(spec.id).map(|l| l.cancel);
+                    let started = Instant::now();
+                    while started.elapsed() < wait {
+                        if cancel.as_ref().map(|c| c.load(Ordering::Relaxed)).unwrap_or(false) {
+                            return Err(AppError::Cancelled);
+                        }
+                        tokio::time::sleep(Duration::from_millis(200)).await;
+                    }
+                }
+                Err(e) => return Err(e),
+            }
+        }
+    }
+
+    async fn run_download(&self, spec: &ModelSpec, emit: &(dyn Fn(ProgressEvent) + Sync)) -> AppResult<()> {
         let part = self.part_path(spec);
         let mut downloaded = tokio::fs::metadata(&part).await.map(|m| m.len()).unwrap_or(0);
         if downloaded > spec.size {
@@ -260,6 +326,8 @@ impl ModelManager {
 
         let client = reqwest::Client::builder()
             .user_agent(concat!("PlaudeNote/", env!("CARGO_PKG_VERSION")))
+            .connect_timeout(Duration::from_secs(20))
+            .read_timeout(Duration::from_secs(60))
             .build()
             .map_err(|e| AppError::Other(e.to_string()))?;
 
@@ -302,7 +370,7 @@ impl ModelManager {
             while let Some(chunk) = stream.next().await {
                 if cancel.load(Ordering::Relaxed) {
                     file.flush().await?;
-                    return Err(AppError::Other("paused".into()));
+                    return Err(AppError::Cancelled);
                 }
                 let chunk = chunk.map_err(|e| AppError::Other(format!("stream error: {e}")))?;
                 file.write_all(&chunk).await?;
@@ -316,7 +384,7 @@ impl ModelManager {
                         l.downloaded = downloaded;
                         l.bps = bps;
                     });
-                    self.emit(app, spec);
+                    self.emit_with(emit, spec);
                     last_emit = Instant::now();
                     if secs > 2.0 {
                         window_start = Instant::now();
@@ -339,7 +407,7 @@ impl ModelManager {
                 l.status = Status::Extracting;
                 l.downloaded = spec.size;
             });
-            self.emit(app, spec);
+            self.emit_with(emit, spec);
             let part2 = part.clone();
             let target2 = target.clone();
             tauri::async_runtime::spawn_blocking(move || unpack_tar_gz(&part2, &target2))
@@ -350,6 +418,20 @@ impl ModelManager {
             tokio::fs::rename(&part, &target).await?;
         }
         Ok(())
+    }
+}
+
+/// Network hiccups are retried; "size mismatch", 4xx and local I/O errors are not.
+fn is_transient(e: &AppError) -> bool {
+    match e {
+        AppError::Other(m) => {
+            m.starts_with("request failed")
+                || m.starts_with("stream error")
+                || m.starts_with("HTTP 5")
+                || m.contains("timed out")
+                || m.contains("connection")
+        }
+        _ => false,
     }
 }
 
@@ -385,4 +467,50 @@ pub fn find_file(dir: &Path, name: &str) -> Option<PathBuf> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Real network: download whisper-small for a few seconds, pause, resume, finish.
+    /// `cargo test models -- --ignored --nocapture`
+    #[tokio::test]
+    #[ignore]
+    async fn pause_and_resume_real_download() {
+        let root = std::env::temp_dir().join(format!("plaudenote-models-test-{}", std::process::id()));
+        let mgr = Arc::new(ModelManager::new(root.clone()).unwrap());
+        let spec = registry::find("whisper-small-q5").unwrap();
+        let emit = |ev: ProgressEvent| {
+            println!("{:?} {} / {} @ {:.1} MB/s", ev.status, ev.downloaded_bytes, ev.total_bytes, ev.bytes_per_sec / 1e6);
+        };
+
+        // attempt 1: cancel after 4 s
+        mgr.live.lock().unwrap().insert(
+            spec.id.into(),
+            Live { cancel: Arc::new(AtomicBool::new(false)), downloaded: 0, bps: 0.0, status: Status::Downloading, error: None },
+        );
+        let m2 = Arc::clone(&mgr);
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_secs(4)).await;
+            m2.pause(spec.id).unwrap();
+        });
+        let r1 = mgr.run_download_with_retries(spec, &emit).await;
+        let part = mgr.part_path(spec).metadata().map(|m| m.len()).unwrap_or(0);
+        println!("attempt 1 → {:?}, part = {part}", r1.as_ref().err());
+        assert!(matches!(r1, Err(AppError::Cancelled)));
+        assert!(part > 0 && part < spec.size, "expected a partial file");
+        mgr.live.lock().unwrap().remove(spec.id);
+
+        // attempt 2: resume to completion
+        mgr.live.lock().unwrap().insert(
+            spec.id.into(),
+            Live { cancel: Arc::new(AtomicBool::new(false)), downloaded: part, bps: 0.0, status: Status::Downloading, error: None },
+        );
+        let r2 = mgr.run_download_with_retries(spec, &emit).await;
+        println!("attempt 2 → {:?}", r2.as_ref().err());
+        assert!(r2.is_ok());
+        assert!(mgr.is_ready(spec));
+        let _ = std::fs::remove_dir_all(root);
+    }
 }

@@ -7,6 +7,18 @@ pub struct SystemInfo {
     pub arch: &'static str,
     pub os: &'static str,
     pub cpu: String,
+    pub disk_free_bytes: Option<u64>,
+}
+
+/// Free bytes on the volume that holds `path` (longest matching mount point).
+pub fn free_space(path: &std::path::Path) -> Option<u64> {
+    use sysinfo::Disks;
+    let disks = Disks::new_with_refreshed_list();
+    disks
+        .iter()
+        .filter(|d| path.starts_with(d.mount_point()))
+        .max_by_key(|d| d.mount_point().as_os_str().len())
+        .map(|d| d.available_space())
 }
 
 pub fn system_info() -> SystemInfo {
@@ -20,5 +32,6 @@ pub fn system_info() -> SystemInfo {
         arch: std::env::consts::ARCH,
         os: std::env::consts::OS,
         cpu,
+        disk_free_bytes: dirs::home_dir().and_then(|h| free_space(&h)),
     }
 }

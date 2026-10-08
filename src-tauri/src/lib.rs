@@ -20,44 +20,55 @@ use audio::record::Recorder;
 use stt::Stt;
 use llm::LlmServer;
 
+/// Everything that must exist before the first window is usable.
+fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    // ── database ───────────────────────────────────────────────────────
+    let data_dir = app.path().app_data_dir()?;
+    let db = Db::open(&data_dir.join("plaudenote.db"))?;
+    db.with(|c| db::notes::purge_trash_older_than(c, 30))?;
+    db.with(db::recordings::fail_stale_jobs)?;
+    app.manage(db);
+    app.manage(Arc::new(Recorder::default()));
+    app.manage(Arc::new(Stt::default()));
+    app.manage(Arc::new(LlmServer::default()));
+    app.manage(Arc::new(pipeline::Jobs::default()));
+
+    // ── models ─────────────────────────────────────────────────────────
+    let models = ModelManager::new(data_dir.join("models"))?;
+    llm::kill_orphans(&models.root().join("runtime"));
+    app.manage(Arc::new(models));
+
+    // ── window chrome ──────────────────────────────────────────────────
+    let window = app.get_webview_window("main").ok_or("main window must exist")?;
+    #[cfg(target_os = "macos")]
+    {
+        use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial, NSVisualEffectState};
+        // Vibrancy is cosmetic — log and carry on if the OS refuses.
+        if let Err(e) = apply_vibrancy(&window, NSVisualEffectMaterial::Sidebar, Some(NSVisualEffectState::Active), None) {
+            eprintln!("vibrancy unavailable: {e}");
+        }
+    }
+    let _ = window;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .setup(|app| {
-            // ── database ───────────────────────────────────────────────
-            let data_dir = app.path().app_data_dir()?;
-            let db = Db::open(&data_dir.join("plaudenote.db"))?;
-            db.with(|c| db::notes::purge_trash_older_than(c, 30))?;
-            db.with(db::recordings::fail_stale_jobs)?;
-            app.manage(db);
-            app.manage(Arc::new(Recorder::default()));
-            app.manage(Arc::new(Stt::default()));
-            app.manage(Arc::new(LlmServer::default()));
-
-            // ── models ─────────────────────────────────────────────────
-            let models = ModelManager::new(data_dir.join("models"))?;
-            app.manage(Arc::new(models));
-
-            // ── window chrome ──────────────────────────────────────────
-            let window = app
-                .get_webview_window("main")
-                .expect("main window must exist");
-
-            #[cfg(target_os = "macos")]
-            {
-                use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial, NSVisualEffectState};
-                apply_vibrancy(
-                    &window,
-                    NSVisualEffectMaterial::Sidebar,
-                    Some(NSVisualEffectState::Active),
-                    None,
-                )
-                .expect("vibrancy is only supported on macOS 10.10+");
+            // Never let a startup error become a panic inside AppKit's
+            // didFinishLaunching (that aborts the process with a crash report).
+            if let Err(e) = init(app) {
+                use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
+                app.dialog()
+                    .message(format!("PlaudeNote could not start:\n\n{e}"))
+                    .title("PlaudeNote")
+                    .kind(MessageDialogKind::Error)
+                    .blocking_show();
+                std::process::exit(1);
             }
-
-            let _ = window;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -95,6 +106,9 @@ pub fn run() {
             commands::recordings_list,
             commands::transcribe_start,
             commands::transcript_get,
+            commands::job_cancel,
+            commands::pick_media_files,
+            commands::attachment_import,
             commands::ai_note,
             commands::ai_task,
             commands::llm_status,

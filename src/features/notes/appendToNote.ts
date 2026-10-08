@@ -34,14 +34,15 @@ export async function replaceInNote(noteId: string, match: (n: JSONContent) => b
       return !found;
     });
     if (found) editor.chain().insertContentAt(found, replacement).run();
-    else editor.chain().insertContentAt(editor.state.doc.content.size, replacement).run();
+    else if (replacement.length) editor.chain().insertContentAt(editor.state.doc.content.size, replacement).run();
     return;
   }
   const note = await api.noteGet(noteId);
   const doc = parseDoc(note.blocksJson);
   const idx = (doc.content ?? []).findIndex(match);
   if (idx >= 0) doc.content!.splice(idx, 1, ...replacement);
-  else doc.content = [...(doc.content ?? []), ...replacement];
+  else if (replacement.length) doc.content = [...(doc.content ?? []), ...replacement];
+  else return;
   await useNotes.getState().saveNote({ id: noteId, blocksJson: JSON.stringify(doc), ...deriveFromDoc(doc) });
 }
 
@@ -91,4 +92,40 @@ export async function insertAtCursor(noteId: string, nodes: JSONContent[]) {
     return;
   }
   await appendToNote(noteId, nodes);
+}
+
+/** Merge attrs into the first block node matching `match` (keeps content). */
+export async function updateNodeAttrs(noteId: string, match: (n: JSONContent) => boolean, patch: Record<string, unknown>) {
+  const editor = useEditorStore.getState().editor;
+  const current = useNotes.getState().current;
+  if (editor && !editor.isDestroyed && current?.id === noteId) {
+    let found: { pos: number; attrs: Record<string, unknown> } | null = null;
+    editor.state.doc.descendants((node, pos) => {
+      if (found) return false;
+      if (match(node.toJSON() as JSONContent)) found = { pos, attrs: node.attrs as Record<string, unknown> };
+      return !found;
+    });
+    if (!found) return false;
+    const { pos, attrs } = found as { pos: number; attrs: Record<string, unknown> };
+    editor
+      .chain()
+      .command(({ tr }) => {
+        tr.setNodeMarkup(pos, undefined, { ...attrs, ...patch });
+        return true;
+      })
+      .run();
+    return true;
+  }
+  const note = await api.noteGet(noteId);
+  const doc = parseDoc(note.blocksJson);
+  const idx = (doc.content ?? []).findIndex(match);
+  if (idx < 0) return false;
+  doc.content![idx] = { ...doc.content![idx], attrs: { ...(doc.content![idx].attrs ?? {}), ...patch } };
+  await useNotes.getState().saveNote({ id: noteId, blocksJson: JSON.stringify(doc), ...deriveFromDoc(doc) });
+  return true;
+}
+
+/** Remove the first block matching `match`. */
+export async function removeFromNote(noteId: string, match: (n: JSONContent) => boolean) {
+  await replaceInNote(noteId, match, []);
 }

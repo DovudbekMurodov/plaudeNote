@@ -15,20 +15,17 @@ export function AiMenu({ enabled }: { enabled: boolean }) {
   const note = useNotes((s) => s.current);
   const busy = useAi((s) => (note ? !!s.busy[note.id] : false));
   const runTask = useAi((s) => s.runTask);
-  const noteFromRecording = useAi((s) => s.noteFromRecording);
+  const regenerateNote = useAi((s) => s.regenerate);
   const llmReady = useAi((s) => s.llmReady)();
 
   const run = (task: AiTask, targetLang?: string) => async () => {
     if (!editor || !note) return;
     const { text } = collectNoteText(editor);
-    await runTask(note.id, task, text, note.lang ?? "auto", targetLang);
+    await runTask(note.id, task, text, note.lang ?? "auto", { targetLang });
   };
 
   const regenerate = async () => {
-    if (!note) return;
-    const recs = await api.recordingsList(note.id);
-    const last = recs[recs.length - 1];
-    if (last) await noteFromRecording(note.id, last.id);
+    if (note) await regenerateNote(note.id);
   };
 
   return (

@@ -33,7 +33,11 @@ export const useModels = create<ModelsState>()((set, get) => ({
               : m,
           ),
         }));
-        if (p.status === "ready" || p.status === "error") void get().refresh();
+        // Only a finished download changes the on-disk truth; an error must stay visible.
+        if (p.status === "ready") void get().refresh();
+        if (p.status === "ready" || p.status === "error" || p.status === "paused") {
+          void api.systemInfo().then((system) => set({ system })).catch(() => undefined);
+        }
       })
       .then((u) => {
         if (cancelled) u();

@@ -38,6 +38,11 @@ export function ModelsWindow() {
           <span className="inline-flex items-center gap-1.5">
             <HardDrive className="size-3.5" strokeWidth={2} />
             {t("models.diskUsed", { size: formatBytes(readyBytes) })}
+            {system?.diskFreeBytes != null && (
+              <span className={system.diskFreeBytes < 3_000_000_000 ? "font-semibold text-sys-orange" : ""}>
+                · {t("models.diskFree", { size: formatBytes(system.diskFreeBytes) })}
+              </span>
+            )}
           </span>
           <Button variant="ghost" size="sm" className="ms-auto" onClick={() => void api.revealModelsDir()}>
             <FolderOpen className="size-3.5" strokeWidth={2} />
@@ -54,7 +59,7 @@ export function ModelsWindow() {
                 {models
                   .filter((m) => m.kind === kind)
                   .map((m, i) => (
-                    <ModelRow key={m.id} model={m} recommended={m.id === rec} ramGb={system?.ramGb} first={i === 0} />
+                    <ModelRow key={m.id} model={m} recommended={m.id === rec} ramGb={system?.ramGb} diskFree={system?.diskFreeBytes ?? null} first={i === 0} />
                   ))}
               </div>
             </section>

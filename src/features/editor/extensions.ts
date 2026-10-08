@@ -16,6 +16,7 @@ import { AudioNode } from "./nodes/Audio";
 import { TranscriptNode } from "./nodes/Transcript";
 import { MindmapNode } from "./nodes/Mindmap";
 import { ChartNode } from "./nodes/Chart";
+import { AiSummaryNode } from "./nodes/AiSummary";
 import { SlashCommand } from "./slash/SlashCommand";
 
 const lowlight = createLowlight(common);
@@ -47,6 +48,7 @@ export function buildExtensions({ placeholder, onFiles }: Options) {
     TranscriptNode,
     MindmapNode,
     ChartNode,
+    AiSummaryNode,
     Placeholder.configure({
       placeholder: ({ pos }) => placeholder(pos),
       showOnlyCurrent: true,

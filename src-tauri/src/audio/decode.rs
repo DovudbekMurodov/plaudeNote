@@ -5,7 +5,8 @@ use std::fs::File;
 use std::path::Path;
 
 use symphonia::core::audio::SampleBuffer;
-use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_NULL};
+use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_NULL, CODEC_TYPE_OPUS};
+use symphonia::core::formats::FormatReader;
 use symphonia::core::errors::Error as SymError;
 use symphonia::core::formats::FormatOptions;
 use symphonia::core::io::MediaSourceStream;
@@ -34,9 +35,21 @@ pub fn decode_to_wav(src: &Path, dest: &Path) -> AppResult<i64> {
         .find(|t| t.codec_params.codec != CODEC_TYPE_NULL)
         .ok_or_else(|| AppError::Other("no audio track".into()))?;
     let track_id = track.id;
+    // Opus (Telegram/WhatsApp voice notes, WebM) is not in symphonia — libopus handles it.
+    if track.codec_params.codec == CODEC_TYPE_OPUS {
+        let channels = track.codec_params.channels.map(|c| c.count()).unwrap_or(1);
+        let pre_skip = track
+            .codec_params
+            .extra_data
+            .as_deref()
+            .filter(|d| d.len() >= 12 && &d[..8] == b"OpusHead")
+            .map(|d| u16::from_le_bytes([d[10], d[11]]) as u64)
+            .unwrap_or(0);
+        return decode_opus(format, track_id, channels, pre_skip, dest);
+    }
     let mut decoder = symphonia::default::get_codecs()
         .make(&track.codec_params, &DecoderOptions::default())
-        .map_err(|e| AppError::Other(format!("unsupported codec: {e}")))?;
+        .map_err(|e| AppError::Other(format!("unsupported audio format ({e}) — try m4a, mp3, wav, ogg, mp4")))?;
 
     let mut writer = hound::WavWriter::create(dest, wav_spec()).map_err(|e| AppError::Other(e.to_string()))?;
     let mut resampler: Option<Resampler> = None;
@@ -76,6 +89,58 @@ pub fn decode_to_wav(src: &Path, dest: &Path) -> AppResult<i64> {
     if let Some(rs) = resampler.as_mut() {
         for s in rs.finish() {
             writer.write_sample(to_i16(s)).map_err(|e| AppError::Other(e.to_string()))?;
+            written += 1;
+        }
+    }
+    writer.finalize().map_err(|e| AppError::Other(e.to_string()))?;
+    if written == 0 {
+        return Err(AppError::Other("file contains no audio".into()));
+    }
+    Ok((written * 1000 / TARGET_RATE as u64) as i64)
+}
+
+/// Decode an Opus track straight to 16 kHz mono (libopus resamples internally).
+fn decode_opus(
+    mut format: Box<dyn FormatReader>,
+    track_id: u32,
+    channels: usize,
+    pre_skip_48k: u64,
+    dest: &Path,
+) -> AppResult<i64> {
+    let ch = if channels >= 2 { opus::Channels::Stereo } else { opus::Channels::Mono };
+    let mut dec = opus::Decoder::new(TARGET_RATE, ch).map_err(|e| AppError::Other(format!("opus init: {e}")))?;
+    let mut writer = hound::WavWriter::create(dest, wav_spec()).map_err(|e| AppError::Other(e.to_string()))?;
+    // 120 ms is the longest Opus frame.
+    let mut pcm = vec![0i16; (TARGET_RATE as usize * 120 / 1000) * channels.max(1)];
+    let mut skip = pre_skip_48k * TARGET_RATE as u64 / 48_000;
+    let mut written: u64 = 0;
+
+    loop {
+        let packet = match format.next_packet() {
+            Ok(p) => p,
+            Err(SymError::IoError(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
+            Err(SymError::ResetRequired) => break,
+            Err(e) => return Err(AppError::Other(format!("read error: {e}"))),
+        };
+        if packet.track_id() != track_id {
+            continue;
+        }
+        let frames = match dec.decode(&packet.data, &mut pcm, false) {
+            Ok(n) => n,
+            Err(_) => continue, // corrupt packet → skip
+        };
+        let n_ch = channels.max(1);
+        for frame in pcm[..frames * n_ch].chunks_exact(n_ch) {
+            if skip > 0 {
+                skip -= 1;
+                continue;
+            }
+            let mono = if n_ch == 1 {
+                frame[0]
+            } else {
+                ((frame[0] as i32 + frame[1] as i32) / 2) as i16
+            };
+            writer.write_sample(mono).map_err(|e| AppError::Other(e.to_string()))?;
             written += 1;
         }
     }

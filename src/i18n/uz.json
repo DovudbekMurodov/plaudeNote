@@ -62,7 +62,11 @@
     "noModel": "Ovoz modeli yuklanmagan — Modellarni oching",
     "openModels": "Modellar",
     "summarizing": "AI eslatma yozmoqda…",
-    "noLlm": "AI xulosa uchun til modeli yuklanmagan — Modellar"
+    "noLlm": "AI xulosa uchun til modeli yuklanmagan — Modellar",
+    "decoding": "Audio tayyorlanmoqda…",
+    "queued": "Navbatda ({{n}})",
+    "cancelJob": "Bekor qilish",
+    "pickPrompt": "Audio yoki video tanlang"
   },
   "settings": {
     "title": "Sozlamalar",
@@ -151,14 +155,20 @@
       "paused": "To'xtatilgan",
       "extracting": "Ochilmoqda…",
       "error": "Xato"
-    }
+    },
+    "diskFree": "bo'sh joy {{size}}",
+    "noSpace": "Diskda joy yetarli emas ({{size}} kerak)"
   },
   "transcript": {
     "title": "Transkript",
     "collapse": "Yig'ish",
     "expand": "Yoyish",
     "toText": "Matnga aylantirish",
-    "pending": "Transkripsiya qilinmoqda… {{pct}}%"
+    "pending": "Transkripsiya qilinmoqda… {{pct}}%",
+    "decoding": "Audio tayyorlanmoqda…",
+    "queued": "Navbatda — oldingi transkripsiya tugashini kutmoqda",
+    "cancelled": "Bekor qilindi",
+    "cancel": "Bekor qilish"
   },
   "ai": {
     "mindmap": "Fikrlar xaritasi",
@@ -169,6 +179,19 @@
     "summary": "Qisqa xulosa",
     "todos": "Vazifalarni ajrat",
     "translate": "Tarjima",
-    "needModels": "AI modellarini yuklash…"
+    "needModels": "AI modellarini yuklash…",
+    "summaryTitle": "AI eslatma",
+    "pending": "AI eslatma yozmoqda… (birinchi marta model yuklanadi, ~1 daqiqa)",
+    "cancel": "Bekor qilish",
+    "remove": "O'chirish",
+    "regenerateShort": "Qayta yasash",
+    "makeNote": "AI xulosa qilish",
+    "pendingShort": "Yozilmoqda…",
+    "outLang": "Xulosa tili:",
+    "langAuto": "Audio tili",
+    "instructionPlaceholder": "Qo'shimcha ko'rsatma (ixtiyoriy): \"rasmiy uslub\", \"faqat lug'at so'zlari\"…",
+    "instructionHint": "Har bir AI so'roviga qo'shiladi",
+    "askPlaceholder": "AI'dan so'ra: \"5 ta asosiy atamani izohla\", \"imtihon savollari tuz\"…",
+    "ask": "So'rash"
   }
 }

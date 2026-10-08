@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Node, mergeAttributes } from "@tiptap/core";
 import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from "@tiptap/react";
-import { AlignLeft, Loader2 } from "lucide-react";
+import { AlignLeft, Loader2, X } from "lucide-react";
+import { api } from "@/api";
 import { cn } from "@/lib/cn";
 import type { Segment } from "@/api";
 
@@ -38,8 +39,11 @@ export const TranscriptNode = Node.create({
       lang: { default: null },
       segments: { default: [] as Segment[] },
       pending: { default: false },
+      /** decode | queued | running */
+      stage: { default: "queued" },
       progress: { default: 0 },
       error: { default: null },
+      jobId: { default: null },
     };
   },
 
@@ -99,10 +103,22 @@ function TranscriptView({ node, selected, editor, getPos }: NodeViewProps) {
       {node.attrs.pending ? (
         <div className="transcript-pending">
           <Loader2 className="size-3.5 animate-spin" strokeWidth={2} />
-          <span>{t("transcript.pending", { pct: Math.round((node.attrs.progress ?? 0) * 100) })}</span>
+          <span>
+            {node.attrs.stage === "decode"
+              ? t("transcript.decoding")
+              : node.attrs.stage === "queued"
+                ? t("transcript.queued")
+                : t("transcript.pending", { pct: Math.round((node.attrs.progress ?? 0) * 100) })}
+          </span>
+          {node.attrs.jobId && node.attrs.stage !== "decode" && (
+            <button type="button" className="transcript-cancel" onClick={() => void api.jobCancel(node.attrs.jobId)}>
+              <X className="size-3" strokeWidth={2.2} />
+              {t("transcript.cancel")}
+            </button>
+          )}
         </div>
       ) : node.attrs.error ? (
-        <div className="transcript-error">{String(node.attrs.error)}</div>
+        <div className="transcript-error">{node.attrs.error === "cancelled" ? t("transcript.cancelled") : String(node.attrs.error)}</div>
       ) : expanded ? (
         <div className="transcript-body">
           {segments.map((s, i) => (

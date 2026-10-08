@@ -62,7 +62,11 @@
     "noModel": "No speech model yet — open Models",
     "openModels": "Models",
     "summarizing": "AI is writing the note…",
-    "noLlm": "No language model for AI notes — open Models"
+    "noLlm": "No language model for AI notes — open Models",
+    "decoding": "Preparing audio…",
+    "queued": "Queued ({{n}})",
+    "cancelJob": "Cancel",
+    "pickPrompt": "Choose audio or video"
   },
   "settings": {
     "title": "Settings",
@@ -151,14 +155,20 @@
       "paused": "Paused",
       "extracting": "Unpacking…",
       "error": "Error"
-    }
+    },
+    "diskFree": "{{size}} free",
+    "noSpace": "Not enough disk space ({{size}} needed)"
   },
   "transcript": {
     "title": "Transcript",
     "collapse": "Collapse",
     "expand": "Expand",
     "toText": "Convert to text",
-    "pending": "Transcribing… {{pct}}%"
+    "pending": "Transcribing… {{pct}}%",
+    "decoding": "Preparing audio…",
+    "queued": "Queued — waiting for the previous transcription",
+    "cancelled": "Cancelled",
+    "cancel": "Cancel"
   },
   "ai": {
     "mindmap": "Mind map",
@@ -169,6 +179,19 @@
     "summary": "Short summary",
     "todos": "Extract to-dos",
     "translate": "Translate",
-    "needModels": "Download AI models…"
+    "needModels": "Download AI models…",
+    "summaryTitle": "AI note",
+    "pending": "AI is writing the note… (first run loads the model, ~1 min)",
+    "cancel": "Cancel",
+    "remove": "Remove",
+    "regenerateShort": "Regenerate",
+    "makeNote": "Make AI note",
+    "pendingShort": "Writing…",
+    "outLang": "Note language:",
+    "langAuto": "Same as audio",
+    "instructionPlaceholder": "Extra instruction (optional): \"formal style\", \"vocabulary only\"…",
+    "instructionHint": "Added to every AI request",
+    "askPlaceholder": "Ask AI: \"explain the 5 key terms\", \"write exam questions\"…",
+    "ask": "Ask"
   }
 }

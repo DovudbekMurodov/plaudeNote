@@ -123,3 +123,13 @@ button {
 .fade-in {
   animation: fade-in 160ms ease-out both;
 }
+
+/* Window-level drag & drop highlight */
+html.drag-over .editor-pane {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.ai-bar {
+  background: color-mix(in srgb, var(--purple) 5%, transparent);
+}
+@media print { .ai-bar { display: none !important; } }

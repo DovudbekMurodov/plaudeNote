@@ -94,13 +94,22 @@ export function RecordBar() {
         </div>
       )}
       {!error && forThisNote && (
-        <div className="pointer-events-auto fade-in flex items-center gap-2 rounded-full bg-surface/85 px-3 py-1.5 text-[12px] text-ink-2 shadow-float backdrop-blur-xl">
+        <div className="pointer-events-auto fade-in flex items-center gap-2 rounded-full bg-surface/85 py-1 pe-1 ps-3 text-[12px] text-ink-2 shadow-float backdrop-blur-xl">
           <Loader2 className="size-3.5 animate-spin text-accent" strokeWidth={2} />
           <span>
             {forThisNote.stage === "summarize"
               ? t("record.summarizing")
-              : t("record.transcribing", { pct: Math.round(forThisNote.progress * 100) })}
+              : forThisNote.stage === "decode"
+                ? t("record.decoding")
+                : forThisNote.status === "queued"
+                  ? t("record.queued", { n: active.length })
+                  : t("record.transcribing", { pct: Math.round(forThisNote.progress * 100) })}
           </span>
+          {forThisNote.stage !== "decode" && (
+            <IconButton size="sm" title={t("record.cancelJob")} onClick={() => void api.jobCancel(forThisNote.jobId)}>
+              <X />
+            </IconButton>
+          )}
         </div>
       )}
       {!error && sttReady && !llmReady && !recording && models.length > 0 && (

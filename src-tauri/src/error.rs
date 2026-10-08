@@ -10,6 +10,8 @@ pub enum AppError {
     NotFound(String),
     #[error("{0}")]
     Other(String),
+    #[error("cancelled")]
+    Cancelled,
 }
 
 impl From<tauri::Error> for AppError {

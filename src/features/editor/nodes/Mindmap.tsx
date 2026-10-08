@@ -46,6 +46,12 @@ function countNodes(n: MindNode): number {
   return 1 + (n.children ?? []).reduce((a, c) => a + countNodes(c), 0);
 }
 
+function maxLeafLen(n: MindNode): number {
+  return n.children?.length ? Math.max(...n.children.map(maxLeafLen)) : n.name.length;
+}
+/** Pixel width a label needs (≈7.5px per char at 13px) so nothing is clipped at the edges. */
+const labelPx = (chars: number) => Math.min(280, Math.max(48, chars * 7.5 + 24));
+
 function leafCount(n: MindNode): number {
   return n.children?.length ? n.children.reduce((a, c) => a + leafCount(c), 0) : 1;
 }
@@ -116,10 +122,11 @@ function MindmapView({ node, selected, updateAttributes, editor }: NodeViewProps
               type: "tree",
               data: [tree],
               orient: rtl ? "RL" : "LR",
-              top: "4%",
-              bottom: "4%",
-              left: rtl ? "18%" : "6%",
-              right: rtl ? "6%" : "18%",
+              top: 16,
+              bottom: 16,
+              // root label sits outside the root node (towards the edge), leaves outside the far edge
+              left: rtl ? labelPx(maxLeafLen(tree)) : labelPx(tree.name.length),
+              right: rtl ? labelPx(tree.name.length) : labelPx(maxLeafLen(tree)),
               symbol: "circle",
               symbolSize: 9,
               initialTreeDepth: -1,
