@@ -10,7 +10,7 @@ use crate::db::recordings;
 use crate::db::Db;
 use crate::error::{AppError, AppResult};
 use crate::llm::prompts::{self, Extra, Task};
-use crate::llm::{complete_json, count_tokens, LlmServer, N_CTX};
+use crate::llm::{complete_json, complete_text, count_tokens, LlmServer, N_CTX};
 use crate::models::registry::ModelKind;
 use crate::models::ModelManager;
 use crate::pipeline::{emit_job, JobEvent, Jobs};
@@ -103,6 +103,16 @@ async fn complete_fit(port: u16, prompt: &prompts::Prompt, prompt_tokens: usize)
     }
 }
 
+/// One plain-text condensation step. A cut answer is kept up to its last full line.
+async fn condense(port: u16, p: &prompts::Prompt) -> AppResult<String> {
+    let (text, truncated) = complete_text(port, &p.system, &p.user, p.max_tokens).await?;
+    if !truncated {
+        return Ok(text);
+    }
+    let keep = text.rfind('\n').map(|i| &text[..i]).unwrap_or(&text).trim().to_string();
+    Ok(keep)
+}
+
 /// Run `task` over `text`, chunking (map → reduce) when the input does not fit
 /// the context window. `progress` gets 0..1 for the LLM phase.
 async fn run_task(
@@ -146,9 +156,7 @@ async fn run_task_with(
     let mut notes: Vec<String> = Vec::with_capacity(total);
     for (i, chunk) in chunks.iter().enumerate() {
         let p = prompts::build_part(task, chunk, lang, target_lang, extra, i + 1, total);
-        let ptoks = count_tokens(port, &p.user).await? + sys_tokens;
-        let v = complete_fit(port, &p, ptoks).await?;
-        let t = v["text"].as_str().unwrap_or("").trim().to_string();
+        let t = condense(port, &p).await?;
         if !t.is_empty() {
             notes.push(t);
         }
@@ -170,9 +178,7 @@ async fn run_task_with(
         let mut again = Vec::new();
         for (i, part) in parts.iter().enumerate() {
             let pp = prompts::build_part(task, part, lang, target_lang, extra, i + 1, parts.len());
-            let pt = count_tokens(port, &pp.user).await? + sys_tokens;
-            let v = complete_fit(port, &pp, pt).await?;
-            again.push(v["text"].as_str().unwrap_or("").trim().to_string());
+            again.push(condense(port, &pp).await?);
         }
         joined = again.join("\n\n");
     }
@@ -395,13 +401,17 @@ mod tests {
         let runtime = std::env::var("PLAUDENOTE_TEST_RUNTIME").expect("PLAUDENOTE_TEST_RUNTIME");
         let model = std::env::var("PLAUDENOTE_TEST_LLM").expect("PLAUDENOTE_TEST_LLM");
         let text = std::fs::read_to_string(std::env::var("PLAUDENOTE_TEST_TEXT").expect("PLAUDENOTE_TEST_TEXT")).unwrap();
-        let text: String = text.chars().take(3000).collect();
+        // Defaults keep the test short; PLAUDENOTE_TEST_CHARS=0 uses the whole file,
+        // PLAUDENOTE_TEST_CHUNK=6000 exercises the production chunk size.
+        let max_chars: usize = std::env::var("PLAUDENOTE_TEST_CHARS").ok().and_then(|v| v.parse().ok()).unwrap_or(3000);
+        let chunk: usize = std::env::var("PLAUDENOTE_TEST_CHUNK").ok().and_then(|v| v.parse().ok()).unwrap_or(400);
+        let text: String = if max_chars == 0 { text } else { text.chars().take(max_chars).collect() };
         let server = LlmServer::default();
         let port = server.ensure(std::path::Path::new(&runtime), std::path::Path::new(&model)).await.expect("server up");
         let seen = std::sync::Mutex::new(Vec::new());
         let progress = |p: f64| seen.lock().unwrap().push(p);
         let t0 = std::time::Instant::now();
-        let out = run_task_with(port, Task::Note, &text, "uz", None, &Extra::default(), 400, &progress)
+        let out = run_task_with(port, Task::Note, &text, "uz", None, &Extra::default(), chunk, &progress)
             .await
             .expect("chunked note");
         println!("chunked note in {:?}, progress {:?}", t0.elapsed(), seen.lock().unwrap());

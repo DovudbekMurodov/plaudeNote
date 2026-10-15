@@ -326,6 +326,47 @@ pub async fn complete_json(port: u16, system: &str, user: &str, schema: &Value, 
     serde_json::from_str(content.trim()).map_err(|e| AppError::Other(format!("llm output not valid JSON: {e}")))
 }
 
+/// Plain-text chat completion (no grammar). Returns the text and whether it was
+/// cut by `max_tokens` — for condensation steps a cut answer is still useful.
+pub async fn complete_text(port: u16, system: &str, user: &str, max_tokens: u32) -> AppResult<(String, bool)> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(600))
+        .build()
+        .map_err(|e| AppError::Other(e.to_string()))?;
+    let body = json!({
+        "messages": [
+            { "role": "system", "content": system },
+            { "role": "user", "content": user }
+        ],
+        "temperature": 0.3,
+        "top_p": 0.9,
+        // Small models loop on long Uzbek/Arabic outputs; a mild penalty stops the spiral.
+        "repeat_penalty": 1.1,
+        "repeat_last_n": 256,
+        "max_tokens": max_tokens,
+        "stream": false,
+        "chat_template_kwargs": { "enable_thinking": false },
+        "reasoning_effort": "none"
+    });
+    let resp = client
+        .post(format!("http://127.0.0.1:{port}/v1/chat/completions"))
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| AppError::Other(format!("llm request failed: {e}")))?;
+    let status = resp.status();
+    let text = resp.text().await.map_err(|e| AppError::Other(e.to_string()))?;
+    if !status.is_success() {
+        return Err(AppError::Other(format!("llm HTTP {status}: {}", text.chars().take(300).collect::<String>())));
+    }
+    let v: Value = serde_json::from_str(&text).map_err(|e| AppError::Other(format!("llm response not JSON: {e}")))?;
+    let truncated = v["choices"][0]["finish_reason"].as_str() == Some("length");
+    let content = v["choices"][0]["message"]["content"]
+        .as_str()
+        .ok_or_else(|| AppError::Other("llm response missing content".into()))?;
+    Ok((strip_think(content).trim().to_string(), truncated))
+}
+
 /// Some chat templates still leak `<think>…</think>`; drop it.
 fn strip_think(s: &str) -> &str {
     if let Some(end) = s.find("</think>") {

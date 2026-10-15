@@ -213,17 +213,28 @@ pub fn build(task: Task, input: &str, lang: &str, target_lang: Option<&str>, ext
 
 /// Map step for long recordings: condense one part of the transcript into
 /// dense notes (or, for `Ask`, into everything relevant to the question).
-/// The reduce step then runs the real task over the joined part notes.
+/// Plain text, no JSON — a condensation that gets cut by the token budget is
+/// still useful, and small models loop less without a grammar. The reduce
+/// step then runs the real task over the joined part notes.
 pub fn build_part(task: Task, input: &str, lang: &str, target_lang: Option<&str>, extra: &Extra, part: usize, total: usize) -> Prompt {
-    if task == Task::Translate {
-        // Translation needs no reduce: translate each part, concatenate.
-        return build(task, input, lang, target_lang, extra);
-    }
     let out_code = match target_lang {
         Some(t) if !t.is_empty() && t != "auto" => t,
         _ => lang,
     };
     let out_lang = language_name(out_code);
+    if task == Task::Translate {
+        let to = language_name(target_lang.unwrap_or("en"));
+        return Prompt {
+            system: format!(
+                "You are a professional translator. This is part {part} of {total} of a long transcript. Translate it into {to}, \
+                 preserving meaning, tone and paragraph breaks. Output only the translation, no preamble.{}",
+                user_rules(extra)
+            ),
+            user: input.to_string(),
+            schema: text_schema(),
+            max_tokens: 4000,
+        };
+    }
     let goal = match task {
         Task::Ask => format!(
             "Extract everything in this part that is relevant to the following question or instruction, with the exact facts, names, \
@@ -232,19 +243,26 @@ pub fn build_part(task: Task, input: &str, lang: &str, target_lang: Option<&str>
             extra.question.unwrap_or("").trim()
         ),
         Task::Todos => "List every task, commitment, promise, deadline or follow-up mentioned in this part, each with who is responsible and when, if said.".to_string(),
-        _ => "Write detailed, faithful notes of this part: every topic in order, the facts, names, numbers, examples, tasks, commitments and decisions. \
-              Keep everything that a reader would need to summarise the whole recording later; drop only filler and repetition."
+        _ => "Write dense, faithful notes of this part: every topic in order, the facts, names, numbers, examples, tasks, commitments and decisions. \
+              Keep what a reader needs to summarise the whole recording later; drop filler and repetition."
             .to_string(),
     };
     Prompt {
         system: format!(
             "You are condensing part {part} of {total} of a long voice-recording transcript (it may contain speech-recognition mistakes; \
-             silently fix obvious ones). Write in {out_lang}. Never add facts that are not in the input. Plain text with short paragraphs \
-             or '-' lists, no headings, no introduction. Respond with JSON only: {{\"text\": \"<notes>\"}}. {goal}"
+             silently fix obvious ones). Write in {out_lang}. Never add facts that are not in the input. Plain text: short paragraphs \
+             or '-' lists, no headings, no introduction, no closing remarks. At most 350 words. {goal}"
         ),
         user: input.to_string(),
         schema: text_schema(),
-        max_tokens: 1200,
+        max_tokens: 1500,
+    }
+}
+
+fn user_rules(extra: &Extra) -> String {
+    match extra.instruction.map(str::trim).filter(|i| !i.is_empty()) {
+        Some(i) => format!(" Additional instructions from the user: {i}"),
+        None => String::new(),
     }
 }
 
