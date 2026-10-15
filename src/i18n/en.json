@@ -30,7 +30,8 @@
     "earlier": "Earlier",
     "count_one": "{{count}} Note",
     "count_other": "{{count}} Notes",
-    "newNoteTitle": "New Note"
+    "newNoteTitle": "New Note",
+    "clearSearch": "Clear search"
   },
   "editor": {
     "empty": "No Note Selected",
@@ -66,7 +67,12 @@
     "decoding": "Preparing audio…",
     "queued": "Queued ({{n}})",
     "cancelJob": "Cancel",
-    "pickPrompt": "Choose audio or video"
+    "pickPrompt": "Choose audio or video",
+    "errors": {
+      "noteCreate": "Could not create a note",
+      "decodeFailed": "Could not read the audio file",
+      "transcribeFailed": "Transcription failed"
+    }
   },
   "settings": {
     "title": "Settings",
@@ -91,7 +97,7 @@
   },
   "trash": {
     "banner": "This note is in Recently Deleted. It will be erased after 30 days.",
-    "empty": "Empty"
+    "empty": "Delete All"
   },
   "slash": {
     "text": "Text",
@@ -159,7 +165,17 @@
     "diskFree": "{{size}} free",
     "noSpace": "Not enough disk space ({{size}} needed)",
     "onlyLangs": "{{langs}} only",
-    "importFile": "Add from file…"
+    "importFile": "Add from file…",
+    "desc": {
+      "whisper-large-v3-turbo-q5": "Best quality for Arabic and 90+ languages. Q5_0 quantised.",
+      "whisper-uzbek-kotib-medium": "Fine-tuned on 1,600 h of Uzbek speech. Dramatically better Uzbek than turbo; Uzbek only.",
+      "whisper-uzbek-rubai-medium": "Fine-tuned on Tashkent-dialect podcasts and news (475 h). Alternative to Kotib; Uzbek only.",
+      "whisper-small-q5": "Fast, lower accuracy. Good for quick drafts.",
+      "qwen3.5-4b-q4": "Summaries, to-dos and mind maps. 201 languages. Fits 8 GB Macs.",
+      "qwen3.5-9b-q4": "Noticeably better Uzbek. Needs 16 GB.",
+      "gemma-4-e4b-q4": "Google's small multilingual model. Alternative to Qwen.",
+      "llama-server": "Runs the language model on the GPU (Metal). Required once."
+    }
   },
   "transcript": {
     "title": "Transcript",
@@ -170,6 +186,7 @@
     "decoding": "Preparing audio…",
     "queued": "Queued — waiting for the previous transcription",
     "cancelled": "Cancelled",
+    "interrupted": "Interrupted — the app was closed before transcription finished.",
     "cancel": "Cancel"
   },
   "ai": {
@@ -184,6 +201,7 @@
     "needModels": "Download AI models…",
     "summaryTitle": "AI note",
     "pending": "AI is writing the note… (first run loads the model, ~1 min)",
+    "interrupted": "Interrupted — the app was closed before the AI finished. Tap Regenerate to try again.",
     "cancel": "Cancel",
     "remove": "Remove",
     "regenerateShort": "Regenerate",
@@ -194,6 +212,18 @@
     "instructionPlaceholder": "Extra instruction (optional): \"formal style\", \"vocabulary only\"…",
     "instructionHint": "Added to every AI request",
     "askPlaceholder": "Ask AI: \"explain the 5 key terms\", \"write exam questions\"…",
-    "ask": "Ask"
+    "ask": "Ask",
+    "errors": {
+      "noTranscript": "This note has no transcript yet",
+      "failed": "AI could not finish"
+    },
+    "cancelled": "Cancelled"
+  },
+  "units": {
+    "min": "min",
+    "sec": "s"
+  },
+  "callout": {
+    "changeIcon": "Change icon"
   }
 }

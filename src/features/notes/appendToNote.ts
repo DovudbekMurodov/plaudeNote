@@ -94,8 +94,18 @@ export async function insertAtCursor(noteId: string, nodes: JSONContent[]) {
   await appendToNote(noteId, nodes);
 }
 
-/** Merge attrs into the first block node matching `match` (keeps content). */
-export async function updateNodeAttrs(noteId: string, match: (n: JSONContent) => boolean, patch: Record<string, unknown>) {
+/** Transactions flagged with this meta are UI-only (progress ticks): no autosave, no undo step. */
+export const TRANSIENT_META = "plaudenote:transient";
+
+type AttrPatch = Record<string, unknown> | ((attrs: Record<string, unknown>) => Record<string, unknown>);
+
+/**
+ * Merge attrs into the first block node matching `match` (keeps content).
+ * `patch` may be a function of the current attrs (e.g. to append segments).
+ * `transient`: don't trigger autosave/undo — for progress-only updates.
+ */
+export async function updateNodeAttrs(noteId: string, match: (n: JSONContent) => boolean, patch: AttrPatch, transient = false) {
+  const apply = (attrs: Record<string, unknown>) => ({ ...attrs, ...(typeof patch === "function" ? patch(attrs) : patch) });
   const editor = useEditorStore.getState().editor;
   const current = useNotes.getState().current;
   if (editor && !editor.isDestroyed && current?.id === noteId) {
@@ -107,20 +117,17 @@ export async function updateNodeAttrs(noteId: string, match: (n: JSONContent) =>
     });
     if (!found) return false;
     const { pos, attrs } = found as { pos: number; attrs: Record<string, unknown> };
-    editor
-      .chain()
-      .command(({ tr }) => {
-        tr.setNodeMarkup(pos, undefined, { ...attrs, ...patch });
-        return true;
-      })
-      .run();
+    const tr = editor.state.tr.setNodeMarkup(pos, undefined, apply(attrs));
+    if (transient) tr.setMeta(TRANSIENT_META, true).setMeta("addToHistory", false);
+    editor.view.dispatch(tr);
     return true;
   }
+  if (transient) return false;
   const note = await api.noteGet(noteId);
   const doc = parseDoc(note.blocksJson);
   const idx = (doc.content ?? []).findIndex(match);
   if (idx < 0) return false;
-  doc.content![idx] = { ...doc.content![idx], attrs: { ...(doc.content![idx].attrs ?? {}), ...patch } };
+  doc.content![idx] = { ...doc.content![idx], attrs: apply(doc.content![idx].attrs ?? {}) };
   await useNotes.getState().saveNote({ id: noteId, blocksJson: JSON.stringify(doc), ...deriveFromDoc(doc) });
   return true;
 }

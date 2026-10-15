@@ -2,7 +2,7 @@
  * In-memory API used when the UI runs in a plain browser (`pnpm dev`).
  * Mirrors the Rust behaviour closely enough for layout and interaction work.
  */
-import type { AiEvent, AiNoteResult, Api, Counts, Folder, JobEvent, LevelEvent, ModelInfo, ModelProgress, NoteFull, NoteSummary, Recording, Transcript, TranscriptEvent } from "./types";
+import type { AiEvent, AiNoteResult, Api, Counts, Folder, JobEvent, LevelEvent, ModelInfo, ModelProgress, NoteFull, NoteSummary, Recording, Transcript, TranscriptEvent, TranscriptPartialEvent } from "./types";
 
 const h = (hoursAgo: number) => new Date(Date.now() - hoursAgo * 3_600_000).toISOString();
 const now = () => new Date().toISOString();
@@ -355,6 +355,10 @@ export const mockApi: Api = {
     transcriptListeners.add(cb);
     return () => transcriptListeners.delete(cb);
   },
+  async onTranscriptPartial(cb) {
+    partialListeners.add(cb);
+    return () => partialListeners.delete(cb);
+  },
 
   // ── AI (simulated) ───────────────────────────────────────────────────
   async aiNote(noteId, recordingId, o = {}) {
@@ -431,6 +435,7 @@ const transcripts = new Map<string, Transcript>();
 const levelListeners = new Set<(e: LevelEvent) => void>();
 const jobListeners = new Set<(e: JobEvent) => void>();
 const transcriptListeners = new Set<(e: TranscriptEvent) => void>();
+const partialListeners = new Set<(e: TranscriptPartialEvent) => void>();
 
 // ── mock model catalogue (mirrors src-tauri/src/models/registry.rs) ────────
 const listeners = new Set<(p: ModelProgress) => void>();

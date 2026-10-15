@@ -3,10 +3,9 @@ import type { ReactNode } from "react";
 import { Cpu } from "lucide-react";
 import { Popover, SegmentedControl, Button } from "@/components/ui";
 import { useUI, type Theme } from "@/store/ui";
-import { UI_LANGS, type UiLang } from "@/i18n";
+import { UI_LANGS } from "@/i18n";
 import { api } from "@/api";
 
-const LANG_LABEL: Record<UiLang, string> = { uz: "O'zbek", ar: "عربي", en: "English" };
 
 interface Props {
   trigger: (open: boolean, toggle: () => void) => ReactNode;
@@ -33,7 +32,7 @@ export function SettingsMenu({ trigger }: Props) {
       <Row label={t("settings.language")} className="mt-3">
         <SegmentedControl
           value={lang}
-          options={UI_LANGS.map((l) => ({ value: l, label: LANG_LABEL[l] }))}
+          options={UI_LANGS.map((l) => ({ value: l, label: t(`record.${l}`) }))}
           onChange={setLang}
           size="sm"
         />

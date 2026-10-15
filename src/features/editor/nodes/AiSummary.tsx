@@ -103,7 +103,7 @@ function AiSummaryView({ node, selected, editor, getPos }: NodeViewProps) {
         </div>
       ) : node.attrs.error ? (
         <div className="ai-summary-error" contentEditable={false}>
-          {String(node.attrs.error)}
+          {node.attrs.error === "interrupted" ? t("ai.interrupted") : node.attrs.error === "cancelled" ? t("ai.cancelled") : String(node.attrs.error)}
         </div>
       ) : (
         <NodeViewContent className="ai-summary-body" />

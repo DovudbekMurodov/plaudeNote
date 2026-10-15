@@ -38,6 +38,22 @@ fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     llm::kill_orphans(&models.root().join("runtime"));
     app.manage(Arc::new(models));
 
+    // ── idle unloading ─────────────────────────────────────────────────
+    // Models stay loaded only while they are being used: a 6 GB llama-server
+    // and a 0.5 GB whisper context sitting idle are what make a 16 GB Mac swap.
+    {
+        let llm = Arc::clone(&*app.state::<Arc<LlmServer>>());
+        let stt = Arc::clone(&*app.state::<Arc<Stt>>());
+        tauri::async_runtime::spawn(async move {
+            let idle = std::time::Duration::from_secs(5 * 60);
+            loop {
+                tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+                llm.stop_if_idle(idle);
+                stt.unload_idle(idle);
+            }
+        });
+    }
+
     // ── window chrome ──────────────────────────────────────────────────
     let window = app.get_webview_window("main").ok_or("main window must exist")?;
     #[cfg(target_os = "macos")]

@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import { api, type JobEvent, type Recording } from "@/api";
+import { api, type JobEvent, type Recording, type Segment } from "@/api";
+import type { JSONContent } from "@tiptap/react";
 import { useUI } from "./ui";
 import i18n from "@/i18n";
 import { useNotes } from "./notes";
@@ -48,6 +49,34 @@ const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toStr
 const isPendingFor = (recordingId: string) => (n: { type?: string; attrs?: Record<string, unknown> }) =>
   n.type === "transcript" && n.attrs?.recordingId === recordingId && !!n.attrs?.pending;
 
+/**
+ * Jobs do not survive a restart (or a force-quit mid-way through a 3-hour file).
+ * Any node still marked pending whose job is not live gets an "interrupted" error
+ * instead of spinning forever. Returns the fixed doc, or null when nothing changed.
+ */
+export function reconcilePendingNodes(doc: JSONContent): JSONContent | null {
+  const jobs = useRecorder.getState().jobs;
+  const live = new Set<string>();
+  for (const [key, j] of Object.entries(jobs)) {
+    live.add(key);
+    live.add(j.jobId);
+  }
+  let changed = false;
+  const content = (doc.content ?? []).map((n) => {
+    if (!n.attrs?.pending) return n;
+    if (n.type === "transcript" && !live.has(String(n.attrs.recordingId)) && !live.has(String(n.attrs.jobId))) {
+      changed = true;
+      return { ...n, attrs: { ...n.attrs, pending: false, error: "interrupted", jobId: null } };
+    }
+    if (n.type === "aiSummary" && !live.has(`ai:${String(n.attrs.jobId)}`)) {
+      changed = true;
+      return { ...n, attrs: { ...n.attrs, pending: false, error: "interrupted", jobId: null } };
+    }
+    return n;
+  });
+  return changed ? { ...doc, content } : null;
+}
+
 async function ensureNote(): Promise<string> {
   const ui = useUI.getState();
   if (ui.selectedNoteId && useNotes.getState().current?.id === ui.selectedNoteId && !useNotes.getState().current?.deletedAt) {
@@ -55,7 +84,7 @@ async function ensureNote(): Promise<string> {
   }
   await useNotes.getState().createNote();
   const id = useUI.getState().selectedNoteId;
-  if (!id) throw new Error("could not create a note");
+  if (!id) throw new Error(i18n.t("record.errors.noteCreate"));
   return id;
 }
 
@@ -63,7 +92,7 @@ function recordingTitle(rec: Recording, lang: string): string {
   const d = new Date(rec.createdAt);
   const time = `${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
   const mins = Math.round(rec.durationMs / 60_000);
-  const len = mins >= 1 ? `${mins} min` : `${Math.round(rec.durationMs / 1000)} s`;
+  const len = mins >= 1 ? `${mins} ${i18n.t("units.min")}` : `${Math.round(rec.durationMs / 1000)} ${i18n.t("units.sec")}`;
   return `${rec.source === "mic" ? "🎙" : "📁"} ${time} · ${len}${lang !== "auto" ? ` · ${lang.toUpperCase()}` : ""}`;
 }
 
@@ -103,17 +132,29 @@ export const useRecorder = create<RecorderState>()((set, get) => ({
         });
         if (!e.noteId) return;
         if (e.stage === "decode") {
-          if (e.status === "failed") void updateNodeAttrs(e.noteId, isPendingFor(e.recordingId), { pending: false, error: e.error ?? "decode failed", jobId: null });
+          if (e.status === "failed") void updateNodeAttrs(e.noteId, isPendingFor(e.recordingId), { pending: false, error: e.error ?? i18n.t("record.errors.decodeFailed"), jobId: null });
           return;
         }
         if (e.status === "queued" || e.status === "running") {
-          void updateNodeAttrs(e.noteId, isPendingFor(e.recordingId), { stage: e.status, progress: e.progress, jobId: e.id });
+          // Progress ticks are UI-only: no autosave, no undo step (a 3-hour file sends hundreds).
+          void updateNodeAttrs(e.noteId, isPendingFor(e.recordingId), { stage: e.status, progress: e.progress, jobId: e.id }, true);
         } else if (e.status === "failed") {
-          void updateNodeAttrs(e.noteId, isPendingFor(e.recordingId), { pending: false, error: e.error ?? "failed", jobId: null });
-          set({ error: e.error ?? "transcription failed" });
+          void updateNodeAttrs(e.noteId, isPendingFor(e.recordingId), { pending: false, error: e.error ?? i18n.t("record.errors.transcribeFailed"), jobId: null });
+          set({ error: e.error ?? i18n.t("record.errors.transcribeFailed") });
         } else if (e.status === "cancelled") {
           void updateNodeAttrs(e.noteId, isPendingFor(e.recordingId), { pending: false, error: "cancelled", jobId: null });
         }
+      }),
+    );
+    add(
+      api.onTranscriptPartial((e) => {
+        if (!e.noteId || !e.segments.length) return;
+        // A window of a long recording finished: show its text right away.
+        void updateNodeAttrs(e.noteId, isPendingFor(e.recordingId), (attrs) => ({
+          segments: [...((attrs.segments as Segment[] | undefined) ?? []), ...e.segments],
+          progress: e.progress,
+          stage: "running",
+        }));
       }),
     );
     add(

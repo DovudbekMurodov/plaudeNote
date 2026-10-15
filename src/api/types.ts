@@ -166,6 +166,14 @@ export interface TranscriptEvent {
   transcript: Transcript;
 }
 
+/** A finished window of a long transcription: segments to append + overall progress. */
+export interface TranscriptPartialEvent {
+  recordingId: string;
+  noteId: string | null;
+  segments: Segment[];
+  progress: number;
+}
+
 export interface LevelEvent {
   rms: number;
   peak: number;
@@ -192,6 +200,7 @@ export interface RecorderApi {
   onRecordLevel(cb: (e: LevelEvent) => void): Promise<() => void>;
   onJobUpdate(cb: (e: JobEvent) => void): Promise<() => void>;
   onTranscriptReady(cb: (e: TranscriptEvent) => void): Promise<() => void>;
+  onTranscriptPartial(cb: (e: TranscriptPartialEvent) => void): Promise<() => void>;
 }
 
 export type AiTask = "note" | "mindmap" | "todos" | "summary" | "translate" | "ask";

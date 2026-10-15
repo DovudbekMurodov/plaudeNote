@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { EditorContent, useEditor, type Editor, type JSONContent } from "@tiptap/react";
 import type { NoteFull, SaveNoteInput } from "@/api";
+import { TRANSIENT_META } from "@/features/notes/appendToNote";
 import { useNotes } from "@/store/notes";
 import i18n, { isRtl } from "@/i18n";
 import { useEditorStore } from "./editorStore";
@@ -82,7 +83,8 @@ export function NoteEditor({ note, readOnly = false }: Props) {
       editorProps: {
         attributes: { class: "note-editor", spellcheck: "true" },
       },
-      onUpdate: ({ editor }) => {
+      onUpdate: ({ editor, transaction }) => {
+        if (transaction.getMeta(TRANSIENT_META)) return;
         pending.current = derive(editor, note.id);
         window.clearTimeout(timer.current);
         timer.current = window.setTimeout(flush, SAVE_DELAY_MS);

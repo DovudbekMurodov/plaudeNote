@@ -26,84 +26,84 @@ pub fn app_info() -> AppInfo {
 
 // ── folders ────────────────────────────────────────────────────────────────
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn folders_list(db: State<'_, Db>) -> AppResult<Vec<Folder>> {
     db.with(folders::list)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn folder_create(db: State<'_, Db>, name: String) -> AppResult<Folder> {
     db.with(|c| folders::create(c, &name))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn folder_rename(db: State<'_, Db>, id: String, name: String) -> AppResult<()> {
     db.with(|c| folders::rename(c, &id, &name))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn folder_delete(db: State<'_, Db>, id: String) -> AppResult<()> {
     db.with(|c| folders::delete(c, &id))
 }
 
 // ── notes ──────────────────────────────────────────────────────────────────
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn notes_list(db: State<'_, Db>, folder: String, query: Option<String>) -> AppResult<Vec<NoteSummary>> {
     db.with(|c| notes::list(c, Filter::parse(&folder), query.as_deref()))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn notes_counts(db: State<'_, Db>) -> AppResult<Counts> {
     db.with(notes::counts)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn note_get(db: State<'_, Db>, id: String) -> AppResult<NoteFull> {
     db.with(|c| notes::get(c, &id))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn note_create(db: State<'_, Db>, folder_id: Option<String>, lang: Option<String>) -> AppResult<NoteFull> {
     db.with(|c| notes::create(c, folder_id.as_deref(), lang.as_deref().unwrap_or("uz")))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn note_save(db: State<'_, Db>, note: SaveNote) -> AppResult<String> {
     db.with(|c| notes::save(c, &note))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn note_set_pinned(db: State<'_, Db>, id: String, pinned: bool) -> AppResult<()> {
     db.with(|c| notes::set_pinned(c, &id, pinned))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn note_set_lang(db: State<'_, Db>, id: String, lang: String) -> AppResult<()> {
     db.with(|c| notes::set_lang(c, &id, &lang))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn note_move(db: State<'_, Db>, id: String, folder_id: Option<String>) -> AppResult<()> {
     db.with(|c| notes::move_to(c, &id, folder_id.as_deref()))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn note_trash(db: State<'_, Db>, id: String) -> AppResult<()> {
     db.with(|c| notes::trash(c, &id))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn note_restore(db: State<'_, Db>, id: String) -> AppResult<()> {
     db.with(|c| notes::restore(c, &id))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn note_delete_forever(db: State<'_, Db>, id: String) -> AppResult<()> {
     db.with(|c| notes::delete_forever(c, &id))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn trash_empty(db: State<'_, Db>) -> AppResult<usize> {
     db.with(notes::empty_trash)
 }
@@ -116,7 +116,7 @@ use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 use crate::models::{ModelInfo, ModelManager};
 use crate::system::{system_info as sys_info, SystemInfo};
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn models_list(models: State<'_, Arc<ModelManager>>) -> Vec<ModelInfo> {
     models.list()
 }
@@ -150,7 +150,7 @@ pub async fn model_delete(app: AppHandle, id: String) -> AppResult<()> {
     models.delete(&id)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn system_info() -> SystemInfo {
     sys_info()
 }
@@ -175,7 +175,7 @@ pub fn open_models_window(app: AppHandle) -> AppResult<()> {
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn reveal_models_dir(models: State<'_, Arc<ModelManager>>) -> AppResult<()> {
     let dir = models.root().to_string_lossy().into_owned();
     std::process::Command::new("open").arg(dir).spawn()?;
@@ -295,17 +295,17 @@ pub async fn recording_import(
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn recordings_list(db: State<'_, Db>, note_id: String) -> AppResult<Vec<Recording>> {
     db.with(|c| recordings::recordings_for_note(c, &note_id))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn transcribe_start(app: AppHandle, recording_id: String, lang: Option<String>) -> AppResult<String> {
     pipeline::start_transcription(app, recording_id, lang.unwrap_or_else(|| "auto".into()))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn transcript_get(db: State<'_, Db>, recording_id: String) -> AppResult<Option<Transcript>> {
     db.with(|c| recordings::transcript_for_recording(c, &recording_id))
 }
@@ -322,7 +322,7 @@ use crate::llm::prompts::Task;
 use crate::llm::{LlmServer, LlmStatus};
 use crate::pipeline_ai;
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn ai_note(
     app: AppHandle,
     note_id: String,
@@ -403,7 +403,7 @@ pub async fn pick_media_files(prompt: String) -> AppResult<Vec<String>> {
 }
 
 /// Copy a dropped image into the attachments folder; returns the stored path.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn attachment_import(app: AppHandle, path: String) -> AppResult<String> {
     let src = std::path::PathBuf::from(&path);
     let ext = src

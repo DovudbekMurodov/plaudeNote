@@ -32,6 +32,10 @@ pub struct AiEvent {
 
 /// Resolve the model + runtime and bring the server up. Shared by all AI entry points.
 async fn server_port(app: &AppHandle) -> AppResult<u16> {
+    // Whisper is done by now; give its 0.5–1 GB back before the 3–6 GB language model loads.
+    if let Some(stt) = app.try_state::<Arc<crate::stt::Stt>>() {
+        stt.unload_all();
+    }
     let models = Arc::clone(&*app.state::<Arc<ModelManager>>());
     let model = models
         .ready_path(ModelKind::Llm)
@@ -293,6 +297,8 @@ fn spawn_task(
             set_db("running", 0.05, None);
             emit_job(&app, ctx.ev("running", 0.05, None));
             let port = server_port(&app).await?;
+            let llm = Arc::clone(&*app.state::<Arc<LlmServer>>());
+            let _lease = llm.lease();
             if cancel.load(std::sync::atomic::Ordering::Relaxed) {
                 return Err(AppError::Cancelled);
             }

@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import { Node, mergeAttributes } from "@tiptap/core";
 import { NodeViewContent, NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from "@tiptap/react";
@@ -70,6 +71,7 @@ export const Callout = Node.create({
 });
 
 function CalloutView({ node, updateAttributes, editor }: NodeViewProps) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const tone = node.attrs.tone as CalloutTone;
   return (
@@ -79,7 +81,7 @@ function CalloutView({ node, updateAttributes, editor }: NodeViewProps) {
           type="button"
           className="callout-emoji"
           onClick={() => editor.isEditable && setOpen((o) => !o)}
-          aria-label="Change icon"
+          aria-label={t("callout.changeIcon")}
         >
           {node.attrs.emoji}
         </button>

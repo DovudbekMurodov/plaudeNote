@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import i18n from "@/i18n";
 import type { Editor, JSONContent } from "@tiptap/react";
 import { api, type AiEvent, type AiNoteResult, type AiTask, type JobEvent, type MindNode, type AiActionItem } from "@/api";
 import { useNotes } from "./notes";
@@ -113,7 +114,7 @@ export const useAi = create<AiState>()((set) => ({
         return { busy };
       });
     } else if (e.status === "failed") {
-      void updateNodeAttrs(noteId, isPendingSummary, { pending: false, error: e.error ?? "failed", jobId: null });
+      void updateNodeAttrs(noteId, isPendingSummary, { pending: false, error: e.error ?? i18n.t("ai.errors.failed"), jobId: null });
       set((s) => {
         const busy = { ...s.busy };
         delete busy[noteId];
@@ -145,7 +146,7 @@ export const useAi = create<AiState>()((set) => ({
   async regenerate(noteId) {
     const text = await collectTranscripts(noteId);
     if (!text.trim()) {
-      set({ error: "no transcript in this note" });
+      set({ error: i18n.t("ai.errors.noTranscript") });
       return;
     }
     const lang = useNotes.getState().current?.lang ?? useUI.getState().lang;

@@ -25,11 +25,36 @@ struct Running {
     model: PathBuf,
 }
 
-#[derive(Default)]
 pub struct LlmServer {
     running: Mutex<Option<Running>>,
     /// Serialises start/stop so two jobs don't race to spawn.
     starting: tokio::sync::Mutex<()>,
+    /// Jobs currently using the server (idle shutdown waits for zero).
+    in_flight: std::sync::atomic::AtomicUsize,
+    last_used: Mutex<Instant>,
+}
+
+impl Default for LlmServer {
+    fn default() -> Self {
+        Self {
+            running: Mutex::new(None),
+            starting: tokio::sync::Mutex::new(()),
+            in_flight: std::sync::atomic::AtomicUsize::new(0),
+            last_used: Mutex::new(Instant::now()),
+        }
+    }
+}
+
+/// Marks the server busy while a job holds it.
+pub struct Lease<'a>(&'a LlmServer);
+
+impl Drop for Lease<'_> {
+    fn drop(&mut self) {
+        self.0.in_flight.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+        if let Ok(mut t) = self.0.last_used.lock() {
+            *t = Instant::now();
+        }
+    }
 }
 
 #[derive(serde::Serialize, Clone, Debug)]
@@ -46,6 +71,28 @@ fn free_port() -> AppResult<u16> {
 }
 
 impl LlmServer {
+    pub fn lease(&self) -> Lease<'_> {
+        self.in_flight.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        if let Ok(mut t) = self.last_used.lock() {
+            *t = Instant::now();
+        }
+        Lease(self)
+    }
+
+    /// Stop the server when no job has used it for `max_idle` — it holds 3–6 GB
+    /// of RAM that the rest of a 16 GB Mac badly wants back.
+    pub fn stop_if_idle(&self, max_idle: Duration) {
+        if self.in_flight.load(std::sync::atomic::Ordering::SeqCst) > 0 {
+            return;
+        }
+        let idle = self.last_used.lock().map(|t| t.elapsed() >= max_idle).unwrap_or(false);
+        let running = self.running.lock().map(|g| g.is_some()).unwrap_or(false);
+        if idle && running {
+            eprintln!("llama-server idle for {:?}; stopping", max_idle);
+            self.stop();
+        }
+    }
+
     pub fn status(&self) -> LlmStatus {
         let g = self.running.lock().unwrap_or_else(|e| e.into_inner());
         LlmStatus {
@@ -87,6 +134,9 @@ impl LlmServer {
     /// Make sure a server is up for `model` (restarting if a different model is loaded). Returns the port.
     pub async fn ensure(&self, runtime_dir: &Path, model: &Path) -> AppResult<u16> {
         let _guard = self.starting.lock().await;
+        if let Ok(mut t) = self.last_used.lock() {
+            *t = Instant::now();
+        }
 
         // Already running the right model and healthy?
         let existing = {

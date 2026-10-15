@@ -1,7 +1,7 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { bytesToBase64, fileExt } from "./base64";
-import type { AiEvent, JobEvent, LevelEvent, ModelProgress, TranscriptEvent } from "./types";
+import type { AiEvent, JobEvent, LevelEvent, ModelProgress, TranscriptEvent, TranscriptPartialEvent } from "./types";
 import type { Api } from "./types";
 
 export const tauriApi: Api = {
@@ -53,6 +53,7 @@ export const tauriApi: Api = {
   onRecordLevel: (cb) => listen<LevelEvent>("record:level", (e) => cb(e.payload)),
   onJobUpdate: (cb) => listen<JobEvent>("job:update", (e) => cb(e.payload)),
   onTranscriptReady: (cb) => listen<TranscriptEvent>("transcript:ready", (e) => cb(e.payload)),
+  onTranscriptPartial: (cb) => listen<TranscriptPartialEvent>("transcript:partial", (e) => cb(e.payload)),
 
   aiNote: (noteId, recordingId, o = {}) =>
     invoke("ai_note", { noteId, recordingId, targetLang: o.targetLang ?? null, instruction: o.instruction?.trim() || null }),

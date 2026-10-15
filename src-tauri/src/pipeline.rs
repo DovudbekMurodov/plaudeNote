@@ -12,12 +12,30 @@ use tokio::sync::Semaphore;
 use crate::db::recordings::{self, Transcript};
 use crate::db::Db;
 use crate::error::{AppError, AppResult};
+use crate::llm::LlmServer;
 use crate::models::registry::ModelKind;
 use crate::models::ModelManager;
-use crate::stt::Stt;
+use crate::stt::{Segment, Stt, Update};
 
 pub const JOB_EVENT: &str = "job:update";
 pub const TRANSCRIPT_EVENT: &str = "transcript:ready";
+pub const TRANSCRIPT_PARTIAL_EVENT: &str = "transcript:partial";
+
+/// Recordings at least this long make us unload the language model first:
+/// on a 16 GB Mac, whisper + a resident 6 GB llama-server + the WebView swap.
+const LONG_RECORDING_MS: i64 = 10 * 60 * 1000;
+/// Below this much free RAM the language model is always unloaded before STT.
+const LOW_MEMORY_BYTES: u64 = 3 * 1024 * 1024 * 1024;
+
+/// Beam width: 5 everywhere. With temperature fallback off (see `stt`), beam 5
+/// runs ≈7× realtime on Apple Silicon, so even 3-hour recordings stay under half an hour.
+pub const BEAM_SIZE: i32 = 5;
+
+pub fn available_memory() -> u64 {
+    use sysinfo::{MemoryRefreshKind, RefreshKind, System};
+    let sys = System::new_with_specifics(RefreshKind::nothing().with_memory(MemoryRefreshKind::everything()));
+    sys.available_memory()
+}
 
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -37,6 +55,16 @@ pub struct TranscriptEvent {
     pub recording_id: String,
     pub note_id: Option<String>,
     pub transcript: Transcript,
+}
+
+/// A finished window of a long transcription: segments to append + overall progress.
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct TranscriptPartialEvent {
+    pub recording_id: String,
+    pub note_id: Option<String>,
+    pub segments: Vec<Segment>,
+    pub progress: f64,
 }
 
 /// Shared job registry: concurrency limits + cancellation flags.
@@ -174,6 +202,18 @@ async fn run(
     let _ = db.with(|c| recordings::update_job(c, &ctx.job_id, "running", 0.0, None));
     emit_job(app, ctx.ev("running", 0.0, None));
 
+    // Memory first: a resident llama-server (up to 6 GB) plus whisper on a long file
+    // is exactly what sends a 16 GB Mac into swap and a beachball.
+    let duration_ms = db
+        .with(|c| recordings::get_recording(c, &ctx.recording_id))
+        .map(|r| r.duration_ms)
+        .unwrap_or(0);
+    if duration_ms >= LONG_RECORDING_MS || available_memory() < LOW_MEMORY_BYTES {
+        if let Some(llm) = app.try_state::<Arc<LlmServer>>() {
+            llm.stop();
+        }
+    }
+
     // "auto": let the general model identify the language first, so a specialised
     // model (e.g. the Uzbek fine-tune) can take over when one is installed.
     // Whisper is confident on well-resourced languages (en/ar/ru ≈ 1.0) but hedges on
@@ -208,8 +248,23 @@ async fn run(
     };
     let lang_for_task = lang.clone();
     let res = tauri::async_runtime::spawn_blocking(move || {
-        stt.transcribe_with(&model_path, &wav, &lang_for_task, primer, cancel, move |p| {
-            emit_job(&progress_app, pctx.ev("running", (p as f64 / 100.0).clamp(0.0, 1.0), None));
+        stt.transcribe_with(&model_path, &wav, &lang_for_task, primer, BEAM_SIZE, cancel, move |u: Update| {
+            let progress = u.progress.clamp(0.0, 1.0);
+            if !u.segments.is_empty() {
+                let _ = progress_app.emit(
+                    TRANSCRIPT_PARTIAL_EVENT,
+                    TranscriptPartialEvent {
+                        recording_id: pctx.recording_id.clone(),
+                        note_id: pctx.note_id.clone(),
+                        segments: u.segments,
+                        progress,
+                    },
+                );
+                // Persist progress per window so a restart shows where a long job got to.
+                let db = progress_app.state::<Db>();
+                let _ = db.with(|c| recordings::update_job(c, &pctx.job_id, "running", progress, None));
+            }
+            emit_job(&progress_app, pctx.ev("running", progress, None));
         })
     })
     .await

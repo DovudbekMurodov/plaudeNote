@@ -1,4 +1,6 @@
 import { create } from "zustand";
+import { reconcilePendingNodes } from "./recorder";
+import { deriveFromDoc, parseDoc } from "@/features/notes/docUtils";
 import { api, type Counts, type Folder, type NoteFull, type NoteSummary, type SaveNoteInput } from "@/api";
 import { useUI } from "./ui";
 
@@ -77,6 +79,12 @@ export const useNotes = create<NotesState>()((set, get) => ({
     if (get().current?.id === id) return;
     try {
       const note = await api.noteGet(id);
+      // Spinners from a job that died with the previous app run → "interrupted".
+      const fixed = reconcilePendingNodes(parseDoc(note.blocksJson));
+      if (fixed) {
+        note.blocksJson = JSON.stringify(fixed);
+        void get().saveNote({ id, blocksJson: note.blocksJson, ...deriveFromDoc(fixed) });
+      }
       // Ignore stale responses if the selection moved on meanwhile.
       if (useUI.getState().selectedNoteId === id) set({ current: note });
     } catch {

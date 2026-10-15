@@ -43,7 +43,7 @@ export function ModelRow({ model: m, recommended, ramGb, diskFree, first }: Prop
           {tooBig && <Badge tone="orange">{t("models.needsRam", { gb: m.minRamGb })}</Badge>}
           {noSpace && <Badge tone="red">{t("models.noSpace", { size: formatBytes(remaining) })}</Badge>}
         </div>
-        <div className="mt-0.5 text-[12px] text-ink-2">{m.description}</div>
+        <div className="mt-0.5 text-[12px] text-ink-2">{t(`models.desc.${m.id}`, { defaultValue: m.description })}</div>
         <div className="mt-0.5 text-[11px] text-ink-3">
           {formatBytes(m.size)}
           {m.langs && ` · ${m.langs}`}

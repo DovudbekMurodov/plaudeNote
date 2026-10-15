@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Node, mergeAttributes } from "@tiptap/core";
 import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from "@tiptap/react";
@@ -65,6 +65,22 @@ export const TranscriptNode = Node.create({
   },
 });
 
+/** The segment list only re-renders when the segments array itself changes — not on every progress tick. */
+const SegmentList = memo(function SegmentList({ segments, recordingId }: { segments: Segment[]; recordingId: string }) {
+  return (
+    <div className="transcript-body">
+      {segments.map((s, i) => (
+        <p key={i} className="transcript-seg">
+          <button type="button" className="transcript-ts" onClick={() => seekTo(recordingId, s.startMs)} tabIndex={-1}>
+            {fmt(s.startMs)}
+          </button>
+          <span>{s.text}</span>
+        </p>
+      ))}
+    </div>
+  );
+});
+
 function TranscriptView({ node, selected, editor, getPos }: NodeViewProps) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(true);
@@ -101,35 +117,37 @@ function TranscriptView({ node, selected, editor, getPos }: NodeViewProps) {
       </div>
 
       {node.attrs.pending ? (
-        <div className="transcript-pending">
-          <Loader2 className="size-3.5 animate-spin" strokeWidth={2} />
-          <span>
-            {node.attrs.stage === "decode"
-              ? t("transcript.decoding")
-              : node.attrs.stage === "queued"
-                ? t("transcript.queued")
-                : t("transcript.pending", { pct: Math.round((node.attrs.progress ?? 0) * 100) })}
-          </span>
-          {node.attrs.jobId && node.attrs.stage !== "decode" && (
-            <button type="button" className="transcript-cancel" onClick={() => void api.jobCancel(node.attrs.jobId)}>
-              <X className="size-3" strokeWidth={2.2} />
-              {t("transcript.cancel")}
-            </button>
-          )}
-        </div>
-      ) : node.attrs.error ? (
-        <div className="transcript-error">{node.attrs.error === "cancelled" ? t("transcript.cancelled") : String(node.attrs.error)}</div>
-      ) : expanded ? (
-        <div className="transcript-body">
-          {segments.map((s, i) => (
-            <p key={i} className="transcript-seg">
-              <button type="button" className="transcript-ts" onClick={() => seekTo(node.attrs.recordingId, s.startMs)} tabIndex={-1}>
-                {fmt(s.startMs)}
+        <>
+          <div className="transcript-pending">
+            <Loader2 className="size-3.5 animate-spin" strokeWidth={2} />
+            <span>
+              {node.attrs.stage === "decode"
+                ? t("transcript.decoding")
+                : node.attrs.stage === "queued"
+                  ? t("transcript.queued")
+                  : t("transcript.pending", { pct: Math.round((node.attrs.progress ?? 0) * 100) })}
+            </span>
+            {node.attrs.jobId && node.attrs.stage !== "decode" && (
+              <button type="button" className="transcript-cancel" onClick={() => void api.jobCancel(node.attrs.jobId)}>
+                <X className="size-3" strokeWidth={2.2} />
+                {t("transcript.cancel")}
               </button>
-              <span>{s.text}</span>
-            </p>
-          ))}
+            )}
+          </div>
+          {/* Long recordings arrive window by window — show what is done so far. */}
+          {segments.length > 0 && <SegmentList segments={segments} recordingId={node.attrs.recordingId} />}
+        </>
+      ) : node.attrs.error ? (
+        <div className="transcript-error">
+          {node.attrs.error === "cancelled"
+            ? t("transcript.cancelled")
+            : node.attrs.error === "interrupted"
+              ? t("transcript.interrupted")
+              : String(node.attrs.error)}
+          {node.attrs.error === "interrupted" && segments.length > 0 && <SegmentList segments={segments} recordingId={node.attrs.recordingId} />}
         </div>
+      ) : expanded ? (
+        <SegmentList segments={segments} recordingId={node.attrs.recordingId} />
       ) : (
         <div className="transcript-collapsed">{segments.map((s) => s.text).join(" ")}</div>
       )}

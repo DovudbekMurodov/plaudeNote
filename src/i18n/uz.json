@@ -11,17 +11,17 @@
     "trash": "Savat",
     "newFolder": "Yangi papka",
     "models": "Modellar",
-    "modelsMissing": "Yuklanmagan",
+    "modelsMissing": "Yuklab olinmagan",
     "modelsReady": "Tayyor",
     "global": "Global",
     "globalOff": "O'chiq",
-    "globalOn": "Yoqilgan",
+    "globalOn": "Yoniq",
     "modelsPartial": "Qisman"
   },
   "list": {
     "search": "Qidirish",
     "newNote": "Yangi eslatma",
-    "noNotes": "Eslatma yo'q",
+    "noNotes": "Eslatmalar yo'q",
     "noResults": "Hech narsa topilmadi",
     "pinnedGroup": "Qadalgan",
     "today": "Bugun",
@@ -30,11 +30,12 @@
     "earlier": "Oldinroq",
     "count_one": "{{count}} ta eslatma",
     "count_other": "{{count}} ta eslatma",
-    "newNoteTitle": "Yangi eslatma"
+    "newNoteTitle": "Yangi eslatma",
+    "clearSearch": "Qidiruvni tozalash"
   },
   "editor": {
     "empty": "Eslatma tanlanmagan",
-    "emptyHint": "Chapdan eslatma tanlang yoki yangisini yarating",
+    "emptyHint": "Ro'yxatdan eslatma tanlang yoki yangisini yarating",
     "titlePlaceholder": "Sarlavha",
     "bodyPlaceholder": "Yozishni boshlang yoki ovoz yozing…",
     "ai": "AI",
@@ -42,13 +43,13 @@
     "bold": "Qalin",
     "italic": "Kursiv",
     "list": "Ro'yxat",
-    "checklist": "Tekshiruv ro'yxati",
+    "checklist": "Vazifalar ro'yxati",
     "table": "Jadval",
     "image": "Rasm",
     "orderedList": "Raqamli ro'yxat"
   },
   "record": {
-    "record": "Yozish",
+    "record": "Yozib olish",
     "stop": "To'xtatish",
     "upload": "Audio yuklash",
     "language": "Til",
@@ -58,19 +59,24 @@
     "en": "English",
     "cancel": "Bekor qilish",
     "dismiss": "Yopish",
-    "transcribing": "Transkripsiya… {{pct}}%",
-    "noModel": "Ovoz modeli yuklanmagan — Modellarni oching",
+    "transcribing": "Transkripsiya qilinmoqda… {{pct}}%",
+    "noModel": "Nutq modeli hali yo'q — Modellarni oching",
     "openModels": "Modellar",
     "summarizing": "AI eslatma yozmoqda…",
-    "noLlm": "AI xulosa uchun til modeli yuklanmagan — Modellar",
+    "noLlm": "AI eslatma uchun til modeli yo'q — Modellarni oching",
     "decoding": "Audio tayyorlanmoqda…",
     "queued": "Navbatda ({{n}})",
     "cancelJob": "Bekor qilish",
-    "pickPrompt": "Audio yoki video tanlang"
+    "pickPrompt": "Audio yoki video tanlang",
+    "errors": {
+      "noteCreate": "Eslatma yaratib bo'lmadi",
+      "decodeFailed": "Audio faylni o'qib bo'lmadi",
+      "transcribeFailed": "Transkripsiya xatolik berdi"
+    }
   },
   "settings": {
     "title": "Sozlamalar",
-    "theme": "Mavzu",
+    "theme": "Ko'rinish",
     "system": "Tizim",
     "light": "Yorug'",
     "dark": "Qorong'i",
@@ -79,7 +85,7 @@
   },
   "menu": {
     "pin": "Qadash",
-    "unpin": "Qadashni olish",
+    "unpin": "Qadashni bekor qilish",
     "moveTo": "Papkaga ko'chirish",
     "noFolder": "Papkasiz",
     "delete": "O'chirish",
@@ -90,7 +96,7 @@
     "language": "Eslatma tili"
   },
   "trash": {
-    "banner": "Bu eslatma savatda. 30 kundan keyin butunlay o'chadi.",
+    "banner": "Bu eslatma savatda. 30 kundan keyin butunlay o'chiriladi.",
     "empty": "Savatni tozalash"
   },
   "slash": {
@@ -100,18 +106,18 @@
     "h3": "Sarlavha 3",
     "bullet": "Ro'yxat",
     "numbered": "Raqamli ro'yxat",
-    "task": "Vazifalar",
+    "task": "Vazifalar ro'yxati",
     "toggle": "Yig'iladigan blok",
-    "callout": "Eslatma bloki",
+    "callout": "Izoh bloki",
     "quote": "Iqtibos",
-    "code": "Kod",
+    "code": "Kod bloki",
     "table": "Jadval",
-    "divider": "Ajratuvchi",
+    "divider": "Ajratuvchi chiziq",
     "image": "Rasm",
-    "empty": "Topilmadi"
+    "empty": "Hech narsa topilmadi"
   },
   "block": {
-    "turnInto": "Ga aylantirish",
+    "turnInto": "Turini o'zgartirish",
     "duplicate": "Nusxalash",
     "delete": "Blokni o'chirish",
     "menu": "Blok menyusi"
@@ -122,44 +128,54 @@
     "underline": "Tagiga chizish",
     "strike": "Ustiga chizish",
     "code": "Kod",
-    "highlight": "Ajratish",
+    "highlight": "Belgilash",
     "link": "Havola",
     "linkPlaceholder": "https://…",
     "removeLink": "Havolani olib tashlash"
   },
   "export": {
     "markdown": "Markdown sifatida saqlash…",
-    "copyMarkdown": "Markdown nusxalash",
+    "copyMarkdown": "Markdown sifatida nusxalash",
     "pdf": "Chop etish / PDF…"
   },
   "models": {
     "title": "Modellar",
-    "subtitle": "Transkripsiya va AI modellar shu Mac'da ishlaydi. Bir marta yuklab olinadi, internet keyin kerak emas.",
+    "subtitle": "Transkripsiya va AI modellari shu Macda ishlaydi. Bir marta yuklab olinadi, keyin internet kerak emas.",
     "kind": {
-      "stt": "Ovoz → matn (Whisper)",
-      "llm": "Til modeli (xulosa, to-do, mind map)",
-      "runtime": "Runtime"
+      "stt": "Nutq → matn (Whisper)",
+      "llm": "Til modeli (xulosa, vazifalar, fikrlar xaritasi)",
+      "runtime": "Ishga tushirish muhiti"
     },
-    "download": "Yuklash",
-    "pause": "To'xtatish",
-    "resume": "Davom",
+    "download": "Yuklab olish",
+    "pause": "Pauza",
+    "resume": "Davom ettirish",
     "delete": "O'chirish",
     "retry": "Qayta urinish",
-    "recommended": "Tavsiya",
+    "recommended": "Tavsiya etiladi",
     "needsRam": "{{gb}} GB RAM kerak",
     "ram": "{{gb}} GB RAM",
     "diskUsed": "Diskda: {{size}}",
     "folder": "Papkani ochish",
     "status": {
       "ready": "Tayyor",
-      "paused": "To'xtatilgan",
-      "extracting": "Ochilmoqda…",
-      "error": "Xato"
+      "paused": "Pauzada",
+      "extracting": "Arxiv ochilmoqda…",
+      "error": "Xatolik"
     },
-    "diskFree": "bo'sh joy {{size}}",
+    "diskFree": "{{size}} bo'sh",
     "noSpace": "Diskda joy yetarli emas ({{size}} kerak)",
     "onlyLangs": "Faqat {{langs}}",
-    "importFile": "Fayldan qo'shish…"
+    "importFile": "Fayldan qo'shish…",
+    "desc": {
+      "whisper-large-v3-turbo-q5": "Arab va 90+ til uchun eng sifatli umumiy model. Q5_0.",
+      "whisper-uzbek-kotib-medium": "1 600 soat o'zbek nutqida o'qitilgan. O'zbekchada turbo'dan ancha yaxshi; faqat o'zbek.",
+      "whisper-uzbek-rubai-medium": "Toshkent shevasidagi podkast va yangiliklarda o'qitilgan (475 soat). Kotib'ga muqobil; faqat o'zbek.",
+      "whisper-small-q5": "Tez, aniqligi pastroq. Qoralama uchun.",
+      "qwen3.5-4b-q4": "Xulosa, vazifalar va fikrlar xaritasi. 201 til. 8 GB Mac'larga sig'adi.",
+      "qwen3.5-9b-q4": "O'zbekchani sezilarli yaxshiroq yozadi. 16 GB kerak.",
+      "gemma-4-e4b-q4": "Google'ning kichik ko'p tilli modeli. Qwen'ga muqobil.",
+      "llama-server": "Til modelini GPU'da (Metal) ishga tushiradi. Bir marta kerak."
+    }
   },
   "transcript": {
     "title": "Transkript",
@@ -170,6 +186,7 @@
     "decoding": "Audio tayyorlanmoqda…",
     "queued": "Navbatda — oldingi transkripsiya tugashini kutmoqda",
     "cancelled": "Bekor qilindi",
+    "interrupted": "Uzilib qoldi — transkripsiya tugamasdan ilova yopilgan.",
     "cancel": "Bekor qilish"
   },
   "ai": {
@@ -177,23 +194,36 @@
     "chart": "Diagramma",
     "edit": "Tahrirlash",
     "done": "Tayyor",
-    "regenerate": "Yozuvdan qayta eslatma yasa",
+    "regenerate": "Ovoz yozuvidan eslatmani qayta yaratish",
     "summary": "Qisqa xulosa",
-    "todos": "Vazifalarni ajrat",
+    "todos": "Vazifalarni ajratish",
     "translate": "Tarjima",
-    "needModels": "AI modellarini yuklash…",
+    "needModels": "AI modellarini yuklab olish…",
     "summaryTitle": "AI eslatma",
     "pending": "AI eslatma yozmoqda… (birinchi marta model yuklanadi, ~1 daqiqa)",
+    "interrupted": "Uzilib qoldi — AI tugatmasdan ilova yopilgan. Qayta yaratishni bosing.",
     "cancel": "Bekor qilish",
     "remove": "O'chirish",
-    "regenerateShort": "Qayta yasash",
-    "makeNote": "AI xulosa qilish",
+    "regenerateShort": "Qayta yaratish",
+    "makeNote": "AI eslatma yaratish",
     "pendingShort": "Yozilmoqda…",
-    "outLang": "Xulosa tili:",
+    "outLang": "Eslatma tili:",
     "langAuto": "Audio tili",
-    "instructionPlaceholder": "Qo'shimcha ko'rsatma (ixtiyoriy): \"rasmiy uslub\", \"faqat lug'at so'zlari\"…",
+    "instructionPlaceholder": "Qo'shimcha ko'rsatma (ixtiyoriy): \"rasmiy uslub\", \"faqat lug'at\"…",
     "instructionHint": "Har bir AI so'roviga qo'shiladi",
-    "askPlaceholder": "AI'dan so'ra: \"5 ta asosiy atamani izohla\", \"imtihon savollari tuz\"…",
-    "ask": "So'rash"
+    "askPlaceholder": "AIdan so'rang: \"5 ta asosiy atamani izohlang\", \"imtihon savollari tuzing\"…",
+    "ask": "So'rash",
+    "errors": {
+      "noTranscript": "Bu eslatmada hali transkript yo'q",
+      "failed": "AI ishni tugata olmadi"
+    },
+    "cancelled": "Bekor qilindi"
+  },
+  "units": {
+    "min": "daq",
+    "sec": "s"
+  },
+  "callout": {
+    "changeIcon": "Belgini o'zgartirish"
   }
 }

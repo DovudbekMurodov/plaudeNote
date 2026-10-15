@@ -33,7 +33,7 @@ export function ModelsWindow() {
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-ink-3">
           <span className="inline-flex items-center gap-1.5">
             <Cpu className="size-3.5" strokeWidth={2} />
-            {system ? `${system.cpu || system.arch} · ${system.ramGb} GB RAM` : "…"}
+            {system ? `${system.cpu || system.arch} · ${t("models.ram", { gb: system.ramGb })}` : "…"}
           </span>
           <span className="inline-flex items-center gap-1.5">
             <HardDrive className="size-3.5" strokeWidth={2} />
