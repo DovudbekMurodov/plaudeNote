@@ -5,6 +5,7 @@ import { useModels } from "@/store/models";
 import { useAppearance } from "./useAppearance";
 import { useDragDrop } from "./useDragDrop";
 import { AppShell } from "./AppShell";
+import { scheduleUpdateCheck } from "@/features/update/updater";
 
 /** Keeps the notes store in step with sidebar selection, search and the selected note. */
 function useNotesSync() {
@@ -53,6 +54,7 @@ export function App() {
 
   const startModels = useModels((s) => s.start);
   useEffect(() => startModels(), [startModels]);
+  useEffect(() => scheduleUpdateCheck(), []);
 
   return <AppShell />;
 }

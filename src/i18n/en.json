@@ -167,7 +167,7 @@
     "onlyLangs": "{{langs}} only",
     "importFile": "Add from file…",
     "desc": {
-      "whisper-large-v3-turbo-q5": "Best quality for Arabic and 90+ languages. Q5_0 quantised.",
+      "whisper-large-v3-turbo-q5": "Best quality for Arabic and English (large-v3 turbo, 90+ languages). Uzbek uses the Kotib model.",
       "whisper-uzbek-kotib-medium": "Fine-tuned on 1,600 h of Uzbek speech. Dramatically better Uzbek than turbo; Uzbek only.",
       "whisper-uzbek-rubai-medium": "Fine-tuned on Tashkent-dialect podcasts and news (475 h). Alternative to Kotib; Uzbek only.",
       "whisper-small-q5": "Fast, lower accuracy. Good for quick drafts.",
@@ -175,6 +175,12 @@
       "qwen3.5-9b-q4": "Noticeably better Uzbek. Needs 16 GB.",
       "gemma-4-e4b-q4": "Google's small multilingual model. Alternative to Qwen.",
       "llama-server": "Runs the language model on the GPU (Metal). Required once."
+    },
+    "name": {
+      "whisper-large-v3-turbo-q5": "Whisper — Arabic & English",
+      "whisper-uzbek-kotib-medium": "Whisper — Uzbek (Kotib)",
+      "whisper-uzbek-rubai-medium": "Whisper — Uzbek, alternative (rubaiSTT)",
+      "whisper-small-q5": "Whisper — quick drafts (small)"
     }
   },
   "transcript": {
@@ -225,5 +231,17 @@
   },
   "callout": {
     "changeIcon": "Change icon"
+  },
+  "update": {
+    "available": "PlaudeNote {{version}} is available",
+    "install": "Update and restart",
+    "later": "Later",
+    "downloading": "Downloading update… {{pct}}%",
+    "installing": "Installing…",
+    "check": "Check for updates",
+    "checking": "Checking…",
+    "upToDate": "You're on the latest version",
+    "error": "Could not check for updates",
+    "version": "Version {{version}}"
   }
 }

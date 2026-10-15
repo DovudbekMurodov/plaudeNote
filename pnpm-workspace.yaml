@@ -1,0 +1,5 @@
+# pnpm settings (package.json "pnpm" field is no longer read by pnpm 11).
+# Tauri's own plugins: npm and crate versions must match, and the matching npm
+# release is sometimes younger than pnpm's default 24 h supply-chain cutoff.
+minimumReleaseAgeExclude:
+  - "@tauri-apps/*"

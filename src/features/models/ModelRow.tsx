@@ -31,7 +31,7 @@ export function ModelRow({ model: m, recommended, ramGb, diskFree, first }: Prop
     <div className={cn("flex items-start gap-3 px-3 py-2.5", !first && "hairline-t")}>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="text-[13px] font-semibold">{m.name}</span>
+          <span className="text-[13px] font-semibold">{t(`models.name.${m.id}`, { defaultValue: m.name })}</span>
           {recommended && <Badge tone="accent">{t("models.recommended")}</Badge>}
           {m.langsOnly && <Badge tone="accent">{t("models.onlyLangs", { langs: m.langsOnly.map((l) => l.toUpperCase()).join(", ") })}</Badge>}
           {m.status === "ready" && (

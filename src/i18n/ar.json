@@ -171,7 +171,7 @@
     "onlyLangs": "{{langs}} فقط",
     "importFile": "إضافة من ملف…",
     "desc": {
-      "whisper-large-v3-turbo-q5": "أفضل جودة للعربية وأكثر من ٩٠ لغة. مكمَّم Q5_0.",
+      "whisper-large-v3-turbo-q5": "أفضل جودة للعربية والإنجليزية (large-v3 turbo، أكثر من ٩٠ لغة). الأوزبكية تستخدم نموذج Kotib.",
       "whisper-uzbek-kotib-medium": "مدرَّب على ١٦٠٠ ساعة من الكلام الأوزبكي. أفضل بكثير من turbo للأوزبكية؛ للأوزبكية فقط.",
       "whisper-uzbek-rubai-medium": "مدرَّب على بودكاست وأخبار بلهجة طشقند (٤٧٥ ساعة). بديل لـ Kotib؛ للأوزبكية فقط.",
       "whisper-small-q5": "سريع وأقل دقة. مناسب للمسودات السريعة.",
@@ -179,6 +179,12 @@
       "qwen3.5-9b-q4": "أوزبكية أفضل بوضوح. يحتاج إلى ١٦ GB.",
       "gemma-4-e4b-q4": "نموذج Google الصغير متعدد اللغات. بديل لـ Qwen.",
       "llama-server": "يشغّل نموذج اللغة على معالج الرسوميات (Metal). مطلوب مرة واحدة."
+    },
+    "name": {
+      "whisper-large-v3-turbo-q5": "Whisper — العربية والإنجليزية",
+      "whisper-uzbek-kotib-medium": "Whisper — الأوزبكية (Kotib)",
+      "whisper-uzbek-rubai-medium": "Whisper — الأوزبكية، بديل (rubaiSTT)",
+      "whisper-small-q5": "Whisper — مسودات سريعة (small)"
     }
   },
   "transcript": {
@@ -229,5 +235,17 @@
   },
   "callout": {
     "changeIcon": "تغيير الرمز"
+  },
+  "update": {
+    "available": "الإصدار {{version}} من PlaudeNote متاح",
+    "install": "التحديث وإعادة التشغيل",
+    "later": "لاحقًا",
+    "downloading": "جارٍ تنزيل التحديث… {{pct}}%",
+    "installing": "جارٍ التثبيت…",
+    "check": "التحقق من التحديثات",
+    "checking": "جارٍ التحقق…",
+    "upToDate": "لديك أحدث إصدار",
+    "error": "تعذّر التحقق من التحديثات",
+    "version": "الإصدار {{version}}"
   }
 }

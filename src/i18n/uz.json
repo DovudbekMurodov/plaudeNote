@@ -167,7 +167,7 @@
     "onlyLangs": "Faqat {{langs}}",
     "importFile": "Fayldan qo'shish…",
     "desc": {
-      "whisper-large-v3-turbo-q5": "Arab va 90+ til uchun eng sifatli umumiy model. Q5_0.",
+      "whisper-large-v3-turbo-q5": "Arab va ingliz tili uchun eng sifatli model (large-v3 turbo, 90+ til). O'zbek uchun Kotib ishlatiladi.",
       "whisper-uzbek-kotib-medium": "1 600 soat o'zbek nutqida o'qitilgan. O'zbekchada turbo'dan ancha yaxshi; faqat o'zbek.",
       "whisper-uzbek-rubai-medium": "Toshkent shevasidagi podkast va yangiliklarda o'qitilgan (475 soat). Kotib'ga muqobil; faqat o'zbek.",
       "whisper-small-q5": "Tez, aniqligi pastroq. Qoralama uchun.",
@@ -175,6 +175,12 @@
       "qwen3.5-9b-q4": "O'zbekchani sezilarli yaxshiroq yozadi. 16 GB kerak.",
       "gemma-4-e4b-q4": "Google'ning kichik ko'p tilli modeli. Qwen'ga muqobil.",
       "llama-server": "Til modelini GPU'da (Metal) ishga tushiradi. Bir marta kerak."
+    },
+    "name": {
+      "whisper-large-v3-turbo-q5": "Whisper — Arab va ingliz tili",
+      "whisper-uzbek-kotib-medium": "Whisper — O'zbek tili (Kotib)",
+      "whisper-uzbek-rubai-medium": "Whisper — O'zbek tili, muqobil (rubaiSTT)",
+      "whisper-small-q5": "Whisper — tez qoralama (small)"
     }
   },
   "transcript": {
@@ -225,5 +231,17 @@
   },
   "callout": {
     "changeIcon": "Belgini o'zgartirish"
+  },
+  "update": {
+    "available": "PlaudeNote {{version}} chiqdi",
+    "install": "Yangilash va qayta ochish",
+    "later": "Keyinroq",
+    "downloading": "Yangilanish yuklanmoqda… {{pct}}%",
+    "installing": "O'rnatilmoqda…",
+    "check": "Yangilanishni tekshirish",
+    "checking": "Tekshirilmoqda…",
+    "upToDate": "Eng so'nggi versiya o'rnatilgan",
+    "error": "Yangilanishni tekshirib bo'lmadi",
+    "version": "Versiya {{version}}"
   }
 }
