@@ -1,4 +1,10 @@
 # pnpm settings (package.json "pnpm" field is no longer read by pnpm 11).
+
+# esbuild is a transitive dependency (Tailwind's node package); its install script only
+# checks the platform binary. CI runs pnpm in strict mode and refuses unlisted scripts.
+allowBuilds:
+  esbuild: true
+
 # Tauri's own plugins: npm and crate versions must match, and the matching npm
 # release is sometimes younger than pnpm's default 24 h supply-chain cutoff.
 minimumReleaseAgeExclude:
